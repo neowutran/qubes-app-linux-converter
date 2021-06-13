@@ -1,0 +1,20 @@
+[package]
+name = "qubes-app-linux-converter-client-core"
+version = "0.1.0"
+authors = ["Neowutran <me@neowutran.ovh>"]
+edition = "2018"
+description = "Qubes application - Convert untrusted files to trustable files"
+license = "GPL-3.0"
+readme = "readme.md"
+repository = "https://github.com/neowutran/qubes-app-linux-converter"
+keywords = ["qubes","QubesOS"]
+
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+home = "0"
+env_logger = "0"
+log = "0"
+uuid = {version = "0",  features = ["v4"]}
+qubes-app-linux-converter-common = { path = "../../common" }
