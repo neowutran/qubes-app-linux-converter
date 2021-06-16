@@ -1,0 +1,26 @@
+pkgname=$(egrep "^name" ../Cargo.toml | head -n 1 | cut -d '"' -f 2)
+pkgver=$(egrep "^version" ../Cargo.toml | head -n 1 | cut -d '"' -f 2)
+pkgrel=1
+arch=(x86_64)
+pkgdesc=$(egrep "^description" ../Cargo.toml | head -n 1 | cut -d '"' -f 2)
+url=$(git remote get-url origin)
+license=(GPL)
+makedepends=(git pandoc)
+depends=(libreoffice graphicsmagick zenity poppler python-nautilus)
+
+build() {
+ RUSTUP_TOOLCHAIN=stable cargo build --release --locked --all-features --target-dir=target
+}
+check() {
+ RUSTUP_TOOLCHAIN=stable cargo test --release --locked --target-dir=target
+}
+package() {
+   mkdir -p "$pkgdir/usr/bin"
+   find target/release \
+     -maxdepth 1 \
+     -executable \
+     -type f \
+     -exec install -m 755 "{}" "$pkgdir"/usr/bin \;
+ #cd src
+ #make install-vm DESTDIR="$pkgdir/"
+}

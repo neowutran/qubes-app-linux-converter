@@ -1,8 +1,7 @@
 #![forbid(unsafe_code)]
 #![deny(clippy::mem_forget)]
-
-use qubes_app_linux_converter_common::{strict_process_execute, IMG_DEPTH, OutputType};
-use log::debug;
+use crate::common::{strict_process_execute, OutputType, IMG_DEPTH};
+use log::{debug, error};
 use std::{
     convert::TryInto,
     env::temp_dir,
@@ -15,16 +14,77 @@ use std::{
 };
 use uuid::Uuid;
 
+#[cfg(test)]
+use glob::glob;
+#[cfg(test)]
+use std::sync::mpsc::{self, Receiver};
+
 const MAX_PAGES: u16 = 10_000;
 const MAX_IMG_WIDTH: usize = 10_000;
 const MAX_IMG_HEIGHT: usize = 10_000;
 const MAX_IMG_SIZE: usize = MAX_IMG_WIDTH * MAX_IMG_HEIGHT * 3;
+
+#[cfg(not(test))]
+const QREXEC_BINARY: &str = "/usr/bin/qrexec-client-vm";
+
+#[cfg(test)]
+const QREXEC_BINARY: &str = "target/debug/server";
+
+#[test]
+fn convert_integration_test() {
+    env_logger::init();
+    for entry in glob("tests/files/*").expect("Failed to read glob pattern") {
+        match entry {
+            Ok(path) => {
+                println!("{:?}", path.display());
+                let directory = path.parent().unwrap().to_str().unwrap();
+                let file_base_name = path.file_stem().unwrap().to_str().unwrap();
+                let file_extension = path.extension().unwrap().to_str().unwrap();
+                let mimetype: mime::Mime = tree_magic::from_filepath(&path)
+                    .parse()
+                    .expect("Incorrect detection of mimetype");
+                let mut expected_output_filename = format!(
+                    "{}/{}.trusted.",
+                    &directory,
+                    &file_base_name
+                );
+                expected_output_filename.push_str(match (mimetype.type_(), mimetype.subtype()) {
+                    (mime::AUDIO, _) => panic!("Audio convert not implemented"),
+                    (mime::VIDEO, _) => panic!("Video convert not implemented"),
+                    (mime::IMAGE, _) => "png",
+                    _ => "pdf",
+                });
+                match fs::remove_file(&expected_output_filename) {
+                    Ok(_) => panic!("Converted file already exist before beginning of the tests !"),
+                    Err(_) => {}
+                }
+                    let parameters = ConvertParameters {
+                        in_place: false,
+                        archive: Some("./tests/archives".to_string()),
+                        files: vec![path.to_str().unwrap().to_string()],
+                        default_password: "toor".to_string()
+                    };
+                    let (transmitter_convert_events, receiver_convert_events) = mpsc::channel();
+                    convert_all_files(&transmitter_convert_events, &parameters).unwrap();
+                assert_eq!(
+                    true,
+                    std::path::Path::new(&expected_output_filename).exists()
+                    );
+                fs::remove_file(&expected_output_filename).unwrap();
+                fs::rename(&format!("tests/archives/{}.{}", &file_base_name, file_extension),  &path).unwrap();
+            }
+            Err(e) => panic!("glob error"),
+        }
+    }
+}
+
 
 #[derive(Debug)]
 pub struct ConvertParameters {
     pub files: Vec<String>,
     pub in_place: bool,
     pub archive: Option<String>,
+    pub default_password: String
 }
 #[derive(Debug)]
 pub enum ConvertEvent {
@@ -45,8 +105,11 @@ pub enum ConvertEvent {
         message: String,
     },
 }
-pub fn default_archive_folder() -> String{
-    format!("{}/QubesUntrusted/",home::home_dir().unwrap().to_str().unwrap())
+pub fn default_archive_folder() -> String {
+    format!(
+        "{}/QubesUntrusted/",
+        home::home_dir().unwrap().to_str().unwrap()
+    )
 }
 fn convert_one_page(
     process_stdout: &mut ChildStdout,
@@ -132,6 +195,11 @@ fn convert_one_file(
     let number_pages_raw = buffer_pages_and_type[..2].try_into().unwrap();
     let number_pages = u16::from_le_bytes(number_pages_raw);
     if number_pages > MAX_PAGES {
+        debug!("Number of page sended by the server: {}", number_pages);
+        //TODO remove me:
+        let mut sss = vec![0_u8; 150];
+        process_stdout.read_exact(&mut sss).unwrap();
+        debug!("{:?}", sss);
         panic!("Max page number exceeded: Probably DOS attempt");
     }
     let filename_path = fs::canonicalize(filename)?;
@@ -172,11 +240,12 @@ fn convert_one_file(
             page,
         })?;
     }
+    debug!("CONVERTED ALL PAGES");
     mpsc_sender.send(ConvertEvent::FileConverted {
         file: filename.to_string(),
     })?;
     if output_type == OutputType::Pdf {
-        fs::remove_file(&full_pdf_file)?;
+        let _dont_care_if_fail = fs::remove_file(&full_pdf_file);
     }
     if parameters.in_place {
         fs::remove_file(filename_path)?;
@@ -206,22 +275,20 @@ pub fn convert_all_files(
     );
     fs::create_dir_all(&temporary_directory)?;
     let archive_path = match &parameters.archive {
-        Some(path) => format!("{}/",fs::canonicalize(path)
-            .unwrap().to_str().unwrap()),
+        Some(path) => format!("{}/", fs::canonicalize(path).unwrap().to_str().unwrap()),
         None => default_archive_folder(),
     };
     fs::create_dir_all(&archive_path)?;
-    // TODO DONT FORGET TO REPLACE THAT BY "/usr/bin/qrexec-client-vm"
-    let mut server_process =
-        Command::new("../../server/target/debug/qubes-app-linux-converter-server")
-            .args(&["@dispvm", "qubes.Convert"])
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .spawn()
-            .expect("Convert server failed to start");
+    let mut server_process = Command::new(QREXEC_BINARY)
+        .args(&["@dispvm", "qubes.Convert"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("Convert server failed to start");
     let mut server_process_stdin = server_process.stdin.take().unwrap();
     let mut server_process_stdout = server_process.stdout.as_mut().unwrap();
 
+    server_process_stdin.write_all(format!("{}\n", parameters.default_password).as_bytes())?;
     server_process_stdin.write_all(format!("{}\n", parameters.files.len()).as_bytes())?;
 
     for filename in &parameters.files {

@@ -1,12 +1,14 @@
+#![forbid(unsafe_code)]
+#![deny(clippy::mem_forget)]
+mod client_core;
+mod common;
+use client_core::{convert_all_files, default_archive_folder, ConvertEvent, ConvertParameters};
 use gio::prelude::*;
 use glib::clone;
 use glib::Receiver;
 use glib::Sender;
 use glib::{ToValue, Value};
 use gtk::prelude::*;
-use qubes_app_linux_converter_client_core::{
-    convert_all_files, default_archive_folder, ConvertEvent, ConvertParameters,
-};
 use std::fs::File;
 use std::io::prelude::*;
 use std::{collections::HashMap, convert::TryInto, fs, sync::mpsc, thread};
@@ -72,11 +74,9 @@ fn build_ui(
             gtk::main_quit();
         }),
     );
-    define_parameters_window.connect_destroy(
-        clone!(@weak define_parameters_window => move|_|{
-            gtk::main_quit();
-        }),
-    );
+    define_parameters_window.connect_destroy(clone!(@weak define_parameters_window => move|_|{
+        gtk::main_quit();
+    }));
 
     launch_button.connect_clicked(clone!(@weak define_parameters_window => move |_|{
       let mut files = Vec::new();
@@ -87,7 +87,7 @@ fn build_ui(
       for file_gtk in files_vec{
           files.push(file_gtk.to_str().unwrap().to_string());
       }
-      data_from_ui.send(ConvertParameters{in_place: in_place.get_active(), archive: Some(match archive_folder.get_current_folder_uri(){
+      data_from_ui.send(ConvertParameters{in_place: in_place.get_active(), default_password: String::new(), archive: Some(match archive_folder.get_current_folder_uri(){
           Some(uri) => format!("{}/",uri),
           None => default_archive_folder()
       }), files}).unwrap();
