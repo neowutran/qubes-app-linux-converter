@@ -1,12 +1,11 @@
-pkgname=$(egrep "^name" ../Cargo.toml | head -n 1 | cut -d '"' -f 2)
+pkgname=(qubes-app-linux-converter-client qubes-app-linux-converter-server)
 pkgver=$(egrep "^version" ../Cargo.toml | head -n 1 | cut -d '"' -f 2)
 pkgrel=1
 arch=(x86_64)
 pkgdesc=$(egrep "^description" ../Cargo.toml | head -n 1 | cut -d '"' -f 2)
 url=$(git remote get-url origin)
 license=(GPL)
-makedepends=(git pandoc)
-depends=(libreoffice graphicsmagick zenity poppler python-nautilus)
+makedepends=(git pandoc java-commons-lang poppler pdftk bcprov)
 
 build() {
  RUSTUP_TOOLCHAIN=stable cargo build --release --locked --all-features --target-dir=target
@@ -14,13 +13,17 @@ build() {
 check() {
  RUSTUP_TOOLCHAIN=stable cargo test --release --locked --target-dir=target
 }
-package() {
+package_qubes-app-linux-converter-server() {
+   depends=(libreoffice graphicsmagick zenity poppler java-commons-lang pdftk bcprov)
    mkdir -p "$pkgdir/usr/bin"
-   find target/release \
-     -maxdepth 1 \
-     -executable \
-     -type f \
-     -exec install -m 755 "{}" "$pkgdir"/usr/bin \;
- #cd src
- #make install-vm DESTDIR="$pkgdir/"
+   install -m 755 target/release/qubes-app-linux-converter-server "$pkgdir"/usr/bin
+   make install-vm-server DESTDIR="$pkgdir/"
+
+}
+package_qubes-app-linux-converter-client() {
+   depends=(python-nautilus graphicsmagick poppler bcprov)
+   mkdir -p "$pkgdir/usr/bin"
+   install -m 755 target/release/qubes-app-linux-converter-client-cli "$pkgdir"/usr/bin
+   install -m 755 target/release/qubes-app-linux-converter-client-gtk "$pkgdir"/usr/bin
+   make install-vm-client DESTDIR="$pkgdir/"
 }

@@ -19,89 +19,90 @@
  Both projects can improve the other.
 */
 mod common;
-use common::{strict_process_execute, OutputType, IMG_DEPTH, ProcessOutput};
+use common::{strict_process_execute, OutputType, IMG_DEPTH};
 use log::debug;
 //use qubes_app_linux_converter_common::{strict_process_execute, OutputType, IMG_DEPTH};
+use image::io::Reader as ImageReader;
 use std::{
     env::temp_dir,
     fs::{self, File},
     io::{self, prelude::*, BufRead},
     net::TcpStream,
-    process::{Command,Stdio},
+    process::{Command, Stdio},
     thread, time,
 };
 use uuid::Uuid;
 
-fn convert_image(file_path: &str, file_id: u16) -> Result<(), Box<dyn std::error::Error>> {
+fn convert_image(file_path: &str) -> Result<(), Box<dyn std::error::Error>> {
     debug!("Start converting image");
     let number_pages: u16 = 1;
     io::stdout().write_all(&number_pages.to_le_bytes())?;
     io::stdout().write_all(&[OutputType::Image as u8])?;
-    send_image(file_path, file_id)
+    send_image(file_path)
 }
-fn send_image(file_path: &str, _file_id: u16) -> Result<(), Box<dyn std::error::Error>> {
-    debug!("Start send_image");
-    debug!("Start getting image dimension");
-    let dimension_output =
-        strict_process_execute("gm", &["identify", "-format", "%w %h", file_path]);
-    let dimension_string = String::from_utf8(dimension_output.stdout)?;
-    let dimension_parts: Vec<&str> = dimension_string.split_whitespace().collect();
-    let width: u16 = dimension_parts.get(0).unwrap().parse()?;
-    let height: u16 = dimension_parts.get(1).unwrap().parse()?;
+fn convert_to_png_and_open(file_path: &str) -> image::DynamicImage {
+    let png_file = format!("{}.png", file_path);
+    strict_process_execute("gm", &["convert", file_path, &format!("png:{}", png_file)]);
+    ImageReader::open(png_file)
+        .unwrap()
+        .with_guessed_format()
+        .unwrap()
+        .decode()
+        .unwrap()
+}
+fn send_image(file_path: &str) -> Result<(), Box<dyn std::error::Error>> {
+    debug!("Start send_image: {}",file_path);
+    // Try to open the image with the image rust library. If it fail, convert it to png with GM and
+    // retry.
+    let png_image = match ImageReader::open(file_path)?.with_guessed_format() {
+        Ok(img) => match img.decode() {
+            Ok(supported) => supported,
+            Err(_) => convert_to_png_and_open(file_path),
+        },
+        Err(_) => convert_to_png_and_open(file_path),
+    };
+    let rgba = png_image.into_rgba8();
+    let height = rgba.height() as u16;
+    let width = rgba.width() as u16;
     io::stdout().write_all(&width.to_le_bytes())?;
     io::stdout().write_all(&height.to_le_bytes())?;
-    debug!("Start converting image to RGBA");
-    strict_process_execute(
-        "gm",
-        &[
-            "convert",
-            file_path,
-            "-depth",
-            &format!("{}", IMG_DEPTH),
-            &format!("rgba:{}.rgba", file_path),
-        ],
-    );
-    debug!("End converting image to RGBA");
-    let mut rgba_file = File::open(&format!("{}.rgba", file_path))?;
-    let mut buffer = Vec::new();
-    rgba_file.read_to_end(&mut buffer)?;
+    io::stdout().write_all(&rgba)?;
     fs::remove_file(&file_path)?;
-    fs::remove_file(&format!("{}.rgba", file_path))?;
-    io::stdout().write_all(&buffer)?;
-    debug!("End send_image");
     Ok(())
 }
 
-fn convert_pdf(file_path: &str, file_id: u16, default_password: &str) -> Result<(), Box<dyn std::error::Error>> {
+fn convert_pdf(
+    temporary_directory_file: &str,
+    default_password: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
     debug!("Start getting password");
-    let (password, number_pages) = get_pdf_password_and_pages(file_path, default_password);
-    io::stdout().write_all(&number_pages.to_le_bytes())?;
+    split_pdf_into_pages(temporary_directory_file, default_password);
+    let mut pages = Vec::new();
+    for entry in glob::glob(&format!("{}/pg_*.pdf", temporary_directory_file))
+        .expect("Failed to read glob pattern")
+    {
+        match entry {
+            Ok(path) => {
+                let pngfilename = path.file_stem().unwrap().to_str().unwrap().to_string();
+                let pdftocairo_process = Command::new("pdftocairo")
+                    .args(&[path.to_str().unwrap(), "-png", "-singlefile"])
+                    .current_dir(&temporary_directory_file)
+                    .spawn()
+                    .expect("Unable to launch pdftocairo process");
+                pages.push((pngfilename, pdftocairo_process));
+            }
+            Err(_) => panic!("glob error"),
+        }
+    }
+    io::stdout().write_all(&(pages.len() as u16).to_le_bytes())?;
     io::stdout().write_all(&[OutputType::Pdf as u8])?;
 
     debug!("Start converting PDF pages");
-    for current_page in 1..=number_pages {
-        let png_path = format!("{}.{}", file_path, current_page);
-        // TODO check the issue https://github.com/QubesOS/qubes-issues/issues/6681
-        // If pdftocairo is not enough to convert any type of pdf, the different tries must be
-        // here.
-        strict_process_execute(
-            "pdftocairo",
-            &[
-                "-opw",
-                &password,
-                "-upw",
-                &password,
-                file_path,
-                "-png",
-                "-f",
-                &format!("{}", current_page),
-                "-l",
-                &format!("{}", current_page),
-                "-singlefile",
-                &png_path,
-            ],
-        );
-        send_image(&format!("{}.png", png_path), file_id)?;
+    for (png_page, mut pdftocairo_process) in pages {
+        if !pdftocairo_process.wait().unwrap().success() {
+            panic!("pdftocairo process failed");
+        }
+        send_image(&format!("{}/{}.png", temporary_directory_file, png_page))?;
     }
     Ok(())
 }
@@ -118,45 +119,26 @@ fn prompt_password() -> String {
         .unwrap()
         .to_string();
 }
-fn get_pdf_password_and_pages(file_path: &str, password: &str) -> (String, u16) {
-    let pdfinfo_process = Command::new("pdfinfo")
-        .args(&["-opw", password, "-upw", password, file_path])
+const TO_CONVERT_FILENAME: &str = "to_convert";
+fn split_pdf_into_pages(temporary_directory_file: &str, password: &str) {
+    let to_split = format!("{}/{}", temporary_directory_file, TO_CONVERT_FILENAME);
+    let pdftk_process = Command::new("pdftk")
+        .args(&[&to_split, "input_pw", password, "burst"])
         .stdout(Stdio::piped())
+        .current_dir(temporary_directory_file)
         .output()
         .expect("Unable to start pdfinfo process");
-    if pdfinfo_process.status.success() {
-        let stdout = String::from_utf8_lossy(&pdfinfo_process.stdout);
-        for line in stdout.lines() {
-            if line.starts_with("Pages:") {
-                let line_parts: Vec<&str> = line.split(':').collect();
-                let pages: u16 = line_parts
-                    .get(1)
-                    .expect("pdfinfo issue: no value for 'Pages:' attribut")
-                    .trim()
-                    .parse()
-                    .expect("pdfinfo issue: 'Pages:' attribute value is not a number");
-                return (password.to_string(), pages);
-            }
-        }
-        panic!("pdfinfo issue: no 'Pages:' attribut");
-    } else {
+    if !pdftk_process.status.success() {
         let password = prompt_password();
-        get_pdf_password_and_pages(file_path, &password)
+        split_pdf_into_pages(temporary_directory_file, &password)
     }
 }
 fn convert_office(
-    file_path: &str,
-    file_id: u16,
     temporary_directory: &str,
-    default_password: &str
+    default_password: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let no_password_file = format!("{}.nopassword", file_path);
-    if convert_office_file_to_pdf_without_password(
-        file_path,
-        temporary_directory,
-        &no_password_file,
-    )? {
-        convert_pdf(file_path, file_id, default_password)?;
+    if convert_office_file_to_pdf_without_password(temporary_directory)? {
+        convert_pdf(temporary_directory, default_password)?;
         return Ok(());
     }
 
@@ -175,22 +157,21 @@ fn convert_office(
         thread::sleep(one_seconds);
     }
     debug!("Libreoffice server seems up and ready");
+    let no_password_file = format!("{}/{}.nopassword", temporary_directory, TO_CONVERT_FILENAME);
+    let source_file = format!("{}/{}", temporary_directory, TO_CONVERT_FILENAME);
     let mut is_success = false;
-    if !default_password.is_empty(){
-        is_success = decrypt_office_file(file_path, &no_password_file, port, &default_password);
+    if !default_password.is_empty() {
+        is_success = decrypt_office_file(&source_file, &no_password_file, port, &default_password);
     }
     while !is_success {
         let password = prompt_password();
-        is_success = decrypt_office_file(file_path, &no_password_file, port, &password);
+        is_success = decrypt_office_file(&source_file, &no_password_file, port, &password);
     }
-    if !convert_office_file_to_pdf_without_password(
-        file_path,
-        temporary_directory,
-        &no_password_file,
-    )? {
+    fs::rename(&no_password_file, &source_file).unwrap();
+    if !convert_office_file_to_pdf_without_password(temporary_directory)? {
         panic!("Conversion should have succeeded ! Abording");
     }
-    convert_pdf(file_path, file_id, default_password)
+    convert_pdf(temporary_directory, default_password)
 }
 fn decrypt_office_file(file_path: &str, no_password_file: &str, port: u16, password: &str) -> bool {
     /*
@@ -236,13 +217,10 @@ document.storeAsURL(dst, ())",
         .stdout(Stdio::piped())
         .output()
         .expect("Unable to start python process");
-    //debug!("{}", String::from_utf8(python_process.stderr).unwrap());
     python_process.status.success()
 }
 fn convert_office_file_to_pdf_without_password(
-    file_path: &str,
     temporary_directory: &str,
-    no_password_file: &str,
 ) -> Result<bool, Box<dyn std::error::Error>> {
     /*
     The way libreoffice handle password changed with this commit
@@ -259,25 +237,18 @@ fn convert_office_file_to_pdf_without_password(
     4: Try to decrypt it
     5: Convert the office file to PDF
     */
-    if !std::path::Path::new(&no_password_file).exists() {
-        fs::copy(file_path, &no_password_file)?;
-    }
-    debug!(
-        "converting {} to pdf in directory {}",
-        no_password_file, temporary_directory
-    );
+    let file_path = format!("{}/{}", temporary_directory, TO_CONVERT_FILENAME);
     strict_process_execute(
         "libreoffice",
         &[
             "--headless",
             "--convert-to",
             "pdf",
-            no_password_file,
+            &file_path,
             "--outdir",
             temporary_directory,
         ],
     );
-    fs::remove_file(&no_password_file)?;
     let converted_file = format!("{}.pdf", file_path);
     if std::path::Path::new(&converted_file).exists() {
         fs::rename(&converted_file, file_path)?;
@@ -288,21 +259,23 @@ fn convert_office_file_to_pdf_without_password(
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::init();
     let stdin = io::stdin();
-    let dir = format!(
+    let temporary_directory = format!(
         "{}/qubes_convert_{}",
         temp_dir().to_str().unwrap(),
         Uuid::new_v4()
     );
-    fs::create_dir_all(&dir)?;
+    fs::create_dir_all(&temporary_directory)?;
     let default_password: String = stdin.lock().lines().next().unwrap()?;
     let number_files: u16 = stdin.lock().lines().next().unwrap()?.parse()?;
     for file_id in 0..number_files {
+        let temporary_directory_file = format!("{}/{}", temporary_directory, file_id);
+        fs::create_dir_all(&temporary_directory_file)?;
         let number_bytes: usize = stdin.lock().lines().next().unwrap()?.parse()?;
         debug!("Receiving file, size: {}", number_bytes);
         let mut buffer = vec![0; number_bytes];
         stdin.lock().read_exact(&mut buffer)?;
         debug!("File received");
-        let file_path = format!("{}/{}", &dir, &file_id);
+        let file_path = format!("{}/{}", &temporary_directory_file, TO_CONVERT_FILENAME);
         let mut file = File::create(&file_path)?;
         file.write_all(&buffer)?;
         debug!("File written to disk");
@@ -313,10 +286,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         match (mimetype.type_(), mimetype.subtype()) {
             (mime::AUDIO, _) => panic!("Audio convert not implemented"),
             (mime::VIDEO, _) => panic!("Video convert not implemented"),
-            (mime::IMAGE, _) => convert_image(&file_path, file_id)?,
-            (_, mime::PDF) => convert_pdf(&file_path, file_id, &default_password)?,
-            _ => convert_office(&file_path, file_id, &dir, &default_password)?,
+            (mime::IMAGE, _) => convert_image(&file_path)?,
+            (_, mime::PDF) => convert_pdf(&temporary_directory_file, &default_password)?,
+            _ => convert_office(&temporary_directory_file, &default_password)?,
         }
+        fs::remove_dir_all(&temporary_directory_file)?;
     }
+    fs::remove_dir_all(&temporary_directory)?;
     Ok(())
 }

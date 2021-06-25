@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <requires lib="gtk" version="4.0"/>
+  <object class="GtkListStore" id="convert_status_liststore">
+    <columns>
+      <column type="gchararray"/>
+      <column type="guint"/>
+      <column type="guint"/>
+      <column type="gfloat"/>
+      <column type="gchararray"/>
+    </columns>
+  </object>
+  <object class="GtkApplicationWindow" id="follow_convert_status_window">
+    <child>
+      <object class="GtkTreeView" id="convert_status_treeview">
+        <property name="model">convert_status_liststore</property>
+        <property name="reorderable">1</property>
+        <property name="search-column">1</property>
+        <property name="show-expanders">0</property>
+        <property name="activate-on-single-click">1</property>
+        <child internal-child="selection">
+          <object class="GtkTreeSelection"/>
+        </child>
+        <child>
+          <object class="GtkTreeViewColumn">
+            <property name="title" translatable="yes">Filename</property>
+            <property name="reorderable">1</property>
+            <property name="sort-indicator">1</property>
+            <property name="sort-column-id">0</property>
+            <child>
+              <object class="GtkCellRendererText" id="filename"/>
+              <attributes>
+                <attribute name="text">0</attribute>
+              </attributes>
+            </child>
+          </object>
+        </child>
+        <child>
+          <object class="GtkTreeViewColumn">
+            <property name="title" translatable="yes">Progress</property>
+            <property name="reorderable">1</property>
+            <property name="sort-indicator">1</property>
+            <child>
+              <object class="GtkCellRendererProgress" id="progress"/>
+              <attributes>
+                <attribute name="value">3</attribute>
+              </attributes>
+            </child>
+          </object>
+        </child>
+        <child>
+          <object class="GtkTreeViewColumn">
+            <property name="title" translatable="yes">Status</property>
+            <property name="reorderable">1</property>
+            <property name="sort-indicator">1</property>
+            <child>
+              <object class="GtkCellRendererText" id="status"/>
+              <attributes>
+                <attribute name="text">4</attribute>
+              </attributes>
+            </child>
+          </object>
+        </child>
+      </object>
+    </child>
+  </object>
+</interface>

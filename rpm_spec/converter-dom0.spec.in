@@ -1,0 +1,26 @@
+Name: qubes-converter-dom0
+Version: @VERSION@
+Release: @REL@%{dist}
+Summary: Qubes policy for converter
+License: GPL
+URL: %(git remote get-url origin)
+
+%description
+Qubes policy for converter
+
+%prep
+cp -Rf %{_sourcedir} qubes-converter-dom0-1
+
+%install
+rm -rf $RPM_BUILD_ROOT
+install -D -m 0664 qubes.Convert.policy $RPM_BUILD_ROOT/etc/qubes-rpc/policy/qubes.Convert
+make install-dom0 DESTDIR=$RPM_BUILD_ROOT
+
+%clean
+rm -rf $RPM_BUILD_ROOT
+
+%files
+%config(noreplace) %attr(0664,root,qubes) /etc/qubes-rpc/policy/qubes.Convert
+
+%changelog
+@CHANGELOG@
