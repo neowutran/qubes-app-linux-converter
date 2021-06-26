@@ -31,5 +31,5 @@ package_qubes-app-linux-converter-client() {
    mkdir -p "$pkgdir/usr/bin"
    install -m 755 target/release/qubes-app-linux-converter-client-cli "$pkgdir"/usr/bin
    install -m 755 target/release/qubes-app-linux-converter-client-gtk "$pkgdir"/usr/bin
-   make install-vm-client DESTDIR="$pkgdir/"
+   make -C ../ install-vm-client DESTDIR="$pkgdir/"
 }
