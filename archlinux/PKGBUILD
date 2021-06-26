@@ -1,11 +1,11 @@
 pkgname=(qubes-app-linux-converter-client qubes-app-linux-converter-server)
-pkgver=$(egrep "^version" ../Cargo.toml | head -n 1 | cut -d '"' -f 2)
+pkgver=$(egrep "^version" Cargo.toml | head -n 1 | cut -d '"' -f 2)
 pkgrel=1
 arch=(x86_64)
-pkgdesc=$(egrep "^description" ../Cargo.toml | head -n 1 | cut -d '"' -f 2)
-url=$(git remote get-url origin)
+pkgdesc=$(egrep "^description" Cargo.toml | head -n 1 | cut -d '"' -f 2)
+url=$(cat ./.git/config | grep "url =" | cut -d ' ' -f 3)
 license=(GPL)
-makedepends=(git pandoc java-commons-lang poppler pdftk bcprov)
+makedepends=(pandoc java-commons-lang poppler pdftk bcprov)
 
 build() {
  RUSTUP_TOOLCHAIN=stable cargo build --release --locked --all-features --target-dir=target
