@@ -5,7 +5,7 @@ arch=(x86_64)
 pkgdesc=$(egrep "^description" Cargo.toml | head -n 1 | cut -d '"' -f 2)
 url=$(cat ./.git/config | grep "url =" | cut -d ' ' -f 3)
 license=(GPL)
-makedepends=(pandoc java-commons-lang poppler pdftk bcprov)
+makedepends=(pandoc java-commons-lang poppler pdftk bcprov rustup)
 
 build() {
  RUSTUP_TOOLCHAIN=stable cargo build --release --locked --all-features --target-dir=target
