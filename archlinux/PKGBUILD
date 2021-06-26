@@ -8,10 +8,16 @@ license=(GPL)
 makedepends=(pandoc java-commons-lang poppler pdftk bcprov rustup)
 
 build() {
- RUSTUP_TOOLCHAIN=stable cargo build --release --locked --all-features --target-dir=target
+ # TODO, before this application reach any "releasable" state, remove the "git"
+ # dependencies in Cargo.toml and re-add the "--locked" flag.
+ #RUSTUP_TOOLCHAIN=stable cargo build --release --locked --all-features --target-dir=target
+ RUSTUP_TOOLCHAIN=stable cargo build --release --all-features --target-dir=target
 }
 check() {
- RUSTUP_TOOLCHAIN=stable cargo test --release --locked --target-dir=target
+ # TODO, before this application reach any "releasable" state, remove the "git"
+ # dependencies in Cargo.toml and re-add the "--locked" flag.
+ #RUSTUP_TOOLCHAIN=stable cargo test --release --locked --target-dir=target
+ RUSTUP_TOOLCHAIN=stable cargo test --release --target-dir=target
 }
 package_qubes-app-linux-converter-server() {
    depends=(libreoffice graphicsmagick zenity poppler java-commons-lang pdftk bcprov)

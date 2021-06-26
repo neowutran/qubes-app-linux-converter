@@ -50,6 +50,9 @@ tui = {version = "0", features = ["crossterm"]}
 crossterm = "0"
 glob = "0"
 
+# TODO, before this software reach any "releasable" state:
+# - Stop using "git" dependencies
+# - Stop using "beta" dependencies
 [dependencies.gdk]
 default-features = false
 git = "https://github.com/gtk-rs/gtk4-rs"
