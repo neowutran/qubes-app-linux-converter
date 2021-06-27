@@ -1,4 +1,4 @@
-basepackagename=$(egrep "^name =" ../Cargo.toml | head -n 1 | cut -d '"' -f 2)
+basepackagename=$(egrep "^name =" Cargo.toml | head -n 1 | cut -d '"' -f 2)
 pkgname=($basepackagename-client $basepackagename-server)
 pkgver=$(egrep "^version" Cargo.toml | head -n 1 | cut -d '"' -f 2)
 pkgrel=1
