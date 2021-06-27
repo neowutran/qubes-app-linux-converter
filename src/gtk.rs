@@ -52,6 +52,7 @@ fn connect_launch_button(
     follow_convert_status_window: &gtk::ApplicationWindow,
     define_parameters_window: &gtk::ApplicationWindow,
     in_place: bool,
+    default_password: String,
     data_from_ui: &std::sync::mpsc::Sender<ConvertParameters>,
     application: &gtk::Application,
 ) {
@@ -74,7 +75,7 @@ fn connect_launch_button(
     data_from_ui
         .send(ConvertParameters {
             in_place,
-            default_password: String::new(),
+            default_password,
             archive: Some(match archive {
                 Some(uri) => format!("{}/", uri),
                 None => default_archive_folder(),
@@ -176,13 +177,14 @@ fn build_ui(
     let archive_folder_button: gtk::Button = parameters_selection_builder
         .object("archive_folder")
         .unwrap();
+    let default_password: gtk::Entry = parameters_selection_builder.object("default_password").unwrap();
     archive_folder_button.set_label(&default_archive_folder());
     let in_place: gtk::CheckButton = parameters_selection_builder.object("in_place").unwrap();
     let launch_button: gtk::Button = parameters_selection_builder.object("start").unwrap();
 
     debug!("Configuring UI events");
-    launch_button.connect_clicked(clone!(@weak files_liststore, @weak archive_liststore, @weak define_parameters_window, @weak application => move |_|{
-        connect_launch_button(&archive_liststore, &files_liststore, &follow_convert_status_window, &define_parameters_window, in_place.is_active(), &data_from_ui, &application);
+    launch_button.connect_clicked(clone!(@weak files_liststore, @weak archive_liststore, @weak define_parameters_window, @weak application, @weak default_password => move |_|{
+        connect_launch_button(&archive_liststore, &files_liststore, &follow_convert_status_window, &define_parameters_window, in_place.is_active(), default_password.text().to_string(), &data_from_ui, &application);
     }));
 
     data_to_ui.attach(
@@ -236,6 +238,7 @@ fn update_convert_status_gui(
                 let gtk_filename: String = model.get(tree_iter, 0).get::<String>().unwrap();
                 if &gtk_filename == file {
                     model.set_value(tree_iter, 1, &gtk_number_pages.to_value());
+                    model.set_value(tree_iter, 4, &"Ongoing".to_value());
                     return true;
                 }
                 false
