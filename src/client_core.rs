@@ -166,6 +166,9 @@ pub struct ConvertParameters {
 }
 #[derive(Debug)]
 pub enum ConvertEvent {
+    FileToConvert{
+        file: String,
+    },
     FileInfo {
         output_type: OutputType,
         number_pages: u16,
@@ -339,8 +342,10 @@ pub fn convert_all_files(
     let (tx, rx) = channel();
     let temporary_directory_clone = temporary_directory.clone();
     let files = parameters.files.clone();
+    let message_for_ui_emetter_clone = message_for_ui_emetter.clone();
     thread::spawn(move || {
         for (file_id, filename) in files.into_iter().enumerate() {
+            message_for_ui_emetter_clone.send(ConvertEvent::FileToConvert{file: filename.to_string()}).unwrap();
             debug!("Transmitting file {} to server", filename);
             let temporary_directory_file = format!("{}/{}", &temporary_directory_clone, file_id);
             fs::create_dir_all(&temporary_directory_file).unwrap();

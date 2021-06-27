@@ -60,13 +60,13 @@ fn connect_launch_button(
     files_liststore.foreach(|_tree_model, _tree_path, tree_iter| {
         let gtk_filename: String = files_liststore.get(tree_iter, 0).get::<String>().unwrap();
         files.push(gtk_filename);
-        true
+        false
     });
     let mut archive = None;
     archive_liststore.foreach(|_tree_model, _tree_path, tree_iter| {
         let archive_name: String = archive_liststore.get(tree_iter, 0).get::<String>().unwrap();
         archive = Some(archive_name);
-        false
+        true
     });
     if files.is_empty() {
         return;
@@ -211,12 +211,10 @@ fn update_convert_status_gui(
     model: &gtk::ListStore,
 ) -> glib::Continue {
     match convert_event {
-        ConvertEvent::FileInfo {
-            output_type: _,
-            number_pages,
-            file,
-        } => {
-            let gtk_number_pages = u32::from(*number_pages);
+        ConvertEvent::FileToConvert{
+            file
+        }=>{
+            let gtk_number_pages:u32 = 0;
             let gtk_current_page: u32 = 0;
             let gtk_percentage_progress: f32 = 0.0;
             let values: [(u32, &dyn ToValue); 5] = [
@@ -224,9 +222,24 @@ fn update_convert_status_gui(
                 (1, &gtk_number_pages),
                 (2, &gtk_current_page),
                 (3, &gtk_percentage_progress),
-                (4, &"Ongoing".to_string()),
+                (4, &"Sent to the server, waiting to be converted.".to_string()),
             ];
             model.set(&model.append(), &values);
+        }
+        ConvertEvent::FileInfo {
+            output_type: _,
+            number_pages,
+            file,
+        } => {
+            let gtk_number_pages = u32::from(*number_pages);
+            model.foreach(|_tree_model, _tree_path, tree_iter| {
+                let gtk_filename: String = model.get(tree_iter, 0).get::<String>().unwrap();
+                if &gtk_filename == file {
+                    model.set_value(tree_iter, 1, &gtk_number_pages.to_value());
+                    return true;
+                }
+                false
+            });
         }
         ConvertEvent::PageConverted { file, page } => {
             model.foreach(|_tree_model, _tree_path, tree_iter| {
@@ -235,41 +248,36 @@ fn update_convert_status_gui(
                     let total_page = model.get(tree_iter, 1).get::<u32>().unwrap();
                     debug!("PageConverted. {}: {}/{}", &file, &page, &total_page);
                     let gtk_page = u32::from(*page);
-                    let gtk_value = gtk_page.to_value();
                     #[allow(clippy::cast_possible_truncation)]
                     let percentage: f32 =
                         (f32::from(*page) + 1.0) * 100.0 / (f32::from(total_page as u16));
-                    let gtk_percentage = percentage.to_value();
-                    model.set_value(tree_iter, 2, &gtk_value);
-                    model.set_value(tree_iter, 3, &gtk_percentage);
-                    return false;
+                    model.set_value(tree_iter, 2, &gtk_page.to_value());
+                    model.set_value(tree_iter, 3, &percentage.to_value());
+                    return true;
                 }
-                true
+                false
             });
         }
         ConvertEvent::FileConverted { file } => {
             model.foreach(|_tree_model, _tree_path, tree_iter| {
                 let gtk_filename: String = model.get(tree_iter, 0).get::<String>().unwrap();
                 if &gtk_filename == file {
-                    let gtk_status = "Done".to_value();
                     let percentage: f32 = 100.0;
-                    let gtk_percentage = percentage.to_value();
-                    model.set_value(tree_iter, 3, &gtk_percentage);
-                    model.set_value(tree_iter, 4, &gtk_status);
-                    return false;
+                    model.set_value(tree_iter, 3, &percentage.to_value());
+                    model.set_value(tree_iter, 4, &"Done".to_value());
+                    return true;
                 }
-                true
+                false
             });
         }
         ConvertEvent::Failure { file, message: _ } => {
             model.foreach(|_tree_model, _tree_path, tree_iter| {
                 let gtk_filename: String = model.get(tree_iter, 0).get::<String>().unwrap();
                 if &gtk_filename == file {
-                    let gtk_status = "Failure".to_value();
-                    model.set_value(tree_iter, 4, &gtk_status);
-                    return false;
+                    model.set_value(tree_iter, 4, &"Failure".to_value());
+                    return true;
                 }
-                true
+                false
             });
         }
     }

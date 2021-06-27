@@ -25,6 +25,7 @@ use tui::{
 #[clap(version = crate_version!(), author = crate_authors!())]
 #[clap(setting = AppSettings::ColoredHelp)]
 struct Opts {
+    #[clap(required=true)]
     files: Vec<String>,
     #[clap(short, long)]
     in_place: bool,
@@ -62,18 +63,18 @@ fn fancy_ui_main_loop(
 ) {
     let mut tui_data = Vec::new();
     let number_of_files = all_files.len();
-    for file in all_files.iter() {
-        tui_data.push(FancyTuiData {
+    for convert_status in receiver_convert_events {
+        match convert_status {
+            ConvertEvent::FileToConvert{
+                file
+            }=> tui_data.push(FancyTuiData{
             filename: file.to_string(),
             number_pages: 0,
             current_page: 0,
             output_type: None,
             failed: false,
             started: false,
-        })
-    }
-    for convert_status in receiver_convert_events {
-        match convert_status {
+            }),
             ConvertEvent::FileInfo {
                 output_type,
                 number_pages,
@@ -154,6 +155,9 @@ fn fancy_ui(receiver_convert_events: Receiver<ConvertEvent>, all_files: &mut Vec
 fn non_fancy_ui(receiver_convert_events: Receiver<ConvertEvent>, all_files: &mut Vec<String>) {
     for convert_status in receiver_convert_events {
         match convert_status {
+            ConvertEvent::FileToConvert{
+                file
+            } => println!("Sending to server {} for conversion ", file),
             ConvertEvent::FileInfo {
                 output_type,
                 number_pages,
@@ -194,10 +198,6 @@ fn main() {
         }
     }
     all_files.dedup();
-    if all_files.is_empty() {
-        eprintln!("You provided no files to convert");
-        return;
-    }
     let parameters = ConvertParameters {
         in_place: opts.in_place,
         archive: opts.archive,
