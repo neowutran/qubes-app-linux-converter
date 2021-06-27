@@ -1,98 +1,103 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <interface>
   <requires lib="gtk" version="4.0"/>
-  <object class="GtkListStore" id="liststore_files">
-    <columns>
-      <column type="gchararray"/>
-    </columns>
+  <object class="GtkApplicationWindow" id="define_parameters_window">
+    <child>
+      <object class="GtkBox">
+        <property name="orientation">vertical</property>
+        <child>
+          <object class="GtkBox">
+            <property name="orientation">vertical</property>
+            <property name="homogeneous">1</property>
+            <child>
+              <object class="GtkGrid">
+                <property name="column-homogeneous">1</property>
+                <child>
+                  <object class="GtkLabel">
+                    <property name="label" translatable="yes">Default password</property>
+                    <layout>
+                      <property name="column">0</property>
+                      <property name="row">2</property>
+                    </layout>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkEntry" id="default_password">
+                    <layout>
+                      <property name="column">1</property>
+                      <property name="row">2</property>
+                    </layout>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkLabel">
+                    <property name="label" translatable="yes">Archive folder</property>
+                    <layout>
+                      <property name="column">0</property>
+                      <property name="row">1</property>
+                    </layout>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkButton" id="archive_folder">
+                    <layout>
+                      <property name="column">1</property>
+                      <property name="row">1</property>
+                    </layout>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkCheckButton" id="in_place">
+                    <property name="label" translatable="yes">in place</property>
+                    <layout>
+                      <property name="column">0</property>
+                      <property name="row">3</property>
+                    </layout>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkLabel">
+                    <property name="label" translatable="yes">Files to convert</property>
+                    <layout>
+                      <property name="column">0</property>
+                      <property name="row">0</property>
+                    </layout>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkButton" id="files">
+                    <property name="label" translatable="yes">Select some files to convert</property>
+                    <property name="valign">center</property>
+                    <layout>
+                      <property name="column">1</property>
+                      <property name="row">0</property>
+                    </layout>
+                  </object>
+                </child>
+                <child>
+                  <placeholder/>
+                </child>
+              </object>
+            </child>
+          </object>
+        </child>
+        <child>
+          <object class="GtkButton" id="start">
+            <property name="label" translatable="yes">Start converting</property>
+            <property name="receives-default">1</property>
+          </object>
+        </child>
+      </object>
+    </child>
   </object>
   <object class="GtkListStore" id="liststore_archive">
     <columns>
       <column type="gchararray"/>
     </columns>
   </object>
-  <object class="GtkApplicationWindow" id="define_parameters_window">
-    <child>
-      <object class="GtkBox">
-        <property name="orientation">vertical</property>
-        <property name="homogeneous">1</property>
-        <child>
-          <object class="GtkGrid">
-            <property name="column-homogeneous">1</property>
-            <child>
-              <object class="GtkLabel">
-                <property name="label" translatable="yes">Default password</property>
-                <layout>
-                  <property name="column">0</property>
-                  <property name="row">2</property>
-                </layout>
-              </object>
-            </child>
-            <child>
-              <object class="GtkEntry" id="default_password">
-                <layout>
-                  <property name="column">1</property>
-                  <property name="row">2</property>
-                </layout>
-              </object>
-            </child>
-            <child>
-              <object class="GtkLabel">
-                <property name="label" translatable="yes">Archive folder</property>
-                <layout>
-                  <property name="column">0</property>
-                  <property name="row">1</property>
-                </layout>
-              </object>
-            </child>
-            <child>
-              <object class="GtkButton" id="archive_folder">
-                <property name="visible">1</property>
-                <layout>
-                  <property name="column">1</property>
-                  <property name="row">1</property>
-                </layout>
-              </object>
-            </child>
-            <child>
-              <object class="GtkButton" id="files">
-                <property name="label" translatable="yes">Import</property>
-                <property name="valign">center</property>
-                <layout>
-                  <property name="column">1</property>
-                  <property name="row">0</property>
-                </layout>
-              </object>
-            </child>
-            <child>
-              <object class="GtkLabel">
-                <property name="label" translatable="yes">Files to convert</property>
-                <layout>
-                  <property name="column">0</property>
-                  <property name="row">0</property>
-                </layout>
-              </object>
-            </child>
-          </object>
-        </child>
-        <child>
-          <object class="GtkBox">
-            <property name="orientation">vertical</property>
-            <property name="homogeneous">1</property>
-            <child>
-              <object class="GtkCheckButton" id="in_place">
-                <property name="label" translatable="yes">in place</property>
-              </object>
-            </child>
-            <child>
-              <object class="GtkButton" id="start">
-                <property name="label" translatable="yes">Start converting</property>
-                <property name="receives-default">1</property>
-              </object>
-            </child>
-          </object>
-        </child>
-      </object>
-    </child>
+  <object class="GtkListStore" id="liststore_files">
+    <columns>
+      <column type="gchararray"/>
+    </columns>
   </object>
 </interface>

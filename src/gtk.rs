@@ -96,13 +96,9 @@ fn connect_archive_folder_chooser_button(
     debug!("Launching file picker to select archive folder");
     let file_chooser = gtk::FileChooserNativeBuilder::new()
         .title("Archive folder")
-        //.accept_label(&i18n("_Save"))
-        //.cancel_label(&i18n("_Cancel"))
-        //.modal(true)
         .transient_for(window)
         .action(gtk::FileChooserAction::SelectFolder)
         .build();
-    //file_chooser.set_current_name(&i18n("Weight Measurements.csv"));
     file_chooser.connect_response(
             clone!(@weak archive_liststore, @weak archive_folder_button ,@strong file_chooser => move |_, r| {
                 if r == gtk::ResponseType::Accept {
@@ -123,14 +119,10 @@ fn connect_files_chooser_button(
     debug!("Launching file picker to select files to convert");
     let file_chooser = gtk::FileChooserNativeBuilder::new()
         .title("Files to convert")
-        //.accept_label(&i18n("_Save"))
-        //.cancel_label(&i18n("_Cancel"))
-        //.modal(true)
         .transient_for(window)
         .select_multiple(true)
         .action(gtk::FileChooserAction::Open)
         .build();
-    //file_chooser.set_current_name(&i18n("Weight Measurements.csv"));
     file_chooser.connect_response(
             clone!(@weak files_liststore, @weak files_picker_button, @strong file_chooser => move |_, r| {
                 if r == gtk::ResponseType::Accept {
@@ -184,6 +176,7 @@ fn build_ui(
     let archive_folder_button: gtk::Button = parameters_selection_builder
         .object("archive_folder")
         .unwrap();
+    archive_folder_button.set_label(&default_archive_folder());
     let in_place: gtk::CheckButton = parameters_selection_builder.object("in_place").unwrap();
     let launch_button: gtk::Button = parameters_selection_builder.object("start").unwrap();
 
