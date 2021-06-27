@@ -3,20 +3,19 @@
 use crate::common::{strict_process_execute, OutputType};
 use log::debug;
 use std::{
-    convert::TryInto,
+    convert::{TryFrom, TryInto},
     env::temp_dir,
     ffi::OsString,
     fs::{self, File},
     io::{Read, Write},
     process::{ChildStdout, Command, Stdio},
-    sync::mpsc::Sender,
+    sync::mpsc::{channel, Sender},
+    thread,
 };
 use uuid::Uuid;
 
 #[cfg(test)]
 use glob::glob;
-#[cfg(test)]
-use std::sync::mpsc;
 
 const MAX_PAGES: u16 = 10_000;
 const MAX_IMG_WIDTH: usize = 10_000;
@@ -81,7 +80,7 @@ fn convert_all_in_one_integration_test() {
         files,
         default_password: "toor".to_string(),
     };
-    let (transmitter_convert_events, _receiver_convert_events) = mpsc::channel();
+    let (transmitter_convert_events, _receiver_convert_events) = channel();
     convert_all_files(&transmitter_convert_events, &parameters).unwrap();
     for file_that_must_exist in files_that_must_exist {
         assert_eq!(true, std::path::Path::new(&file_that_must_exist.0).exists());
@@ -136,7 +135,7 @@ fn convert_one_by_one_integration_test() {
                     )],
                     default_password: "toor".to_string(),
                 };
-                let (transmitter_convert_events, _receiver_convert_events) = mpsc::channel();
+                let (transmitter_convert_events, _receiver_convert_events) = channel();
                 convert_all_files(&transmitter_convert_events, &parameters).unwrap();
                 assert_eq!(
                     true,
@@ -149,7 +148,16 @@ fn convert_one_by_one_integration_test() {
     }
 }
 
-#[derive(Debug)]
+impl OutputType {
+    pub const fn extension(self) -> &'static str {
+        match self {
+            Self::Pdf => "pdf",
+            Self::Image => "png",
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct ConvertParameters {
     pub files: Vec<String>,
     pub in_place: bool,
@@ -191,9 +199,12 @@ fn convert_one_page(
     process_stdout.read_exact(&mut buffer_size)?;
     let width_raw = buffer_size[..2].try_into().unwrap();
     let height_raw = buffer_size[2..4].try_into().unwrap();
-    let width = u16::from_le_bytes(width_raw) as usize;
-    let height = u16::from_le_bytes(height_raw) as usize;
-    if height > MAX_IMG_HEIGHT || width > MAX_IMG_WIDTH || width * height * 4 > MAX_IMG_SIZE {
+    let width = u32::from(u16::from_le_bytes(width_raw));
+    let height = u32::from(u16::from_le_bytes(height_raw));
+    if height as usize > MAX_IMG_HEIGHT
+        || width as usize > MAX_IMG_WIDTH
+        || width as usize * height as usize * 4 > MAX_IMG_SIZE
+    {
         panic!("Max image size exceeded: Probably DOS attempt");
     }
 
@@ -202,7 +213,7 @@ fn convert_one_page(
     process_stdout.read_exact(&mut buffer_page)?;
 
     let png_file_path = format!("{}.png", temporary_file_base_page);
-    let image = image::RgbaImage::from_raw(width as u32, height as u32, buffer_page).unwrap();
+    let image = image::RgbaImage::from_raw(width, height, buffer_page).unwrap();
     image.save(&png_file_path).unwrap();
 
     match output_type {
@@ -225,7 +236,7 @@ fn convert_one_file(
     debug!("BEGIN CONVERT ONE FILE: {}", source_file);
     let mut buffer_pages_and_type = vec![0_u8; 2 + 1];
     process_stdout.read_exact(&mut buffer_pages_and_type)?;
-    let number_pages_raw = buffer_pages_and_type[..2].try_into().unwrap();
+    let number_pages_raw = buffer_pages_and_type[..2].try_into()?;
     let number_pages = u16::from_le_bytes(number_pages_raw);
     if number_pages > MAX_PAGES {
         debug!("Number of page sended by the server: {}", number_pages);
@@ -241,7 +252,7 @@ fn convert_one_file(
         .unwrap();
     let source_directory = source_file_path.parent().unwrap().to_str().unwrap();
     let mut output_file = format!("{}/{}.trusted.", source_directory, source_file_basename);
-    let output_type = OutputType::from(*buffer_pages_and_type.get(2).unwrap());
+    let output_type = OutputType::try_from(*buffer_pages_and_type.get(2).unwrap())?;
     output_file.push_str(output_type.extension());
     if output_type == OutputType::Image && number_pages != 1 {
         panic!("Image can only be 1 page. Abording.");
@@ -265,7 +276,7 @@ fn convert_one_file(
     debug!("CONVERTED ALL PAGES");
     match output_type {
         OutputType::Image => {
-            fs::copy(output_files.get(0).unwrap(), output_file).unwrap();
+            fs::copy(output_files.get(0).unwrap(), output_file)?;
         }
         OutputType::Pdf => {
             output_files.push(output_file);
@@ -301,6 +312,13 @@ pub fn convert_all_files(
     message_for_ui_emetter: &Sender<ConvertEvent>,
     parameters: &ConvertParameters,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    let mut server_process = Command::new(QREXEC_BINARY)
+        .args(&["@dispvm", "qubes.Convert"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("Convert server failed to start");
     debug!("{:?}", parameters);
     let temporary_directory = format!(
         "{}/qubes_convert_{}",
@@ -313,33 +331,37 @@ pub fn convert_all_files(
         None => default_archive_folder(),
     };
     fs::create_dir_all(&archive_path)?;
-    let mut server_process = Command::new(QREXEC_BINARY)
-        .args(&["@dispvm", "qubes.Convert"])
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .spawn()
-        .expect("Convert server failed to start");
     let mut server_process_stdin = server_process.stdin.take().unwrap();
     let mut server_process_stdout = server_process.stdout.as_mut().unwrap();
 
     server_process_stdin.write_all(format!("{}\n", parameters.default_password).as_bytes())?;
     server_process_stdin.write_all(format!("{}\n", parameters.files.len()).as_bytes())?;
-
-    let mut file_id = 0;
-    for filename in &parameters.files {
-        debug!("Transmitting file {} to server", filename);
-        let temporary_directory_file = format!("{}/{}", temporary_directory, file_id);
-        fs::create_dir_all(&temporary_directory_file).unwrap();
-        let mut buffer = Vec::new();
-        let mut file = File::open(&filename)?;
-        file.read_to_end(&mut buffer)?;
-        server_process_stdin.write_all(format!("{}\n", buffer.len()).as_bytes())?;
-        server_process_stdin.write_all(&buffer)?;
-        debug!("File {} have been transmitted to the server", filename);
+    let (tx, rx) = channel();
+    let temporary_directory_clone = temporary_directory.clone();
+    let files = parameters.files.clone();
+    thread::spawn(move || {
+        for (file_id, filename) in files.into_iter().enumerate() {
+            debug!("Transmitting file {} to server", filename);
+            let temporary_directory_file = format!("{}/{}", &temporary_directory_clone, file_id);
+            fs::create_dir_all(&temporary_directory_file).unwrap();
+            let mut buffer = Vec::new();
+            let mut file = File::open(&filename).unwrap();
+            file.read_to_end(&mut buffer).unwrap();
+            server_process_stdin
+                .write_all(format!("{}\n", buffer.len()).as_bytes())
+                .unwrap();
+            server_process_stdin.write_all(&buffer).unwrap();
+            debug!("File {} have been transmitted to the server", filename);
+            tx.send((filename, temporary_directory_file)).unwrap();
+        }
+    });
+    for file_info in rx {
+        let filename = file_info.0;
+        let temporary_directory_file = file_info.1;
         if let Err(e) = convert_one_file(
             message_for_ui_emetter,
             &mut server_process_stdout,
-            filename,
+            &filename,
             &temporary_directory_file,
             parameters,
             &archive_path,
@@ -349,7 +371,6 @@ pub fn convert_all_files(
                 message: format!("{:?}", e),
             })?;
         }
-        file_id += 1;
         fs::remove_dir_all(&temporary_directory_file).unwrap();
     }
     fs::remove_dir_all(&temporary_directory).unwrap();

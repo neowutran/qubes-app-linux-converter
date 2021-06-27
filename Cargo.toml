@@ -7,7 +7,8 @@ description = "Qubes application - Convert untrusted files to trustable files"
 license = "GPL-3.0"
 readme = "readme.md"
 repository = "https://github.com/neowutran/qubes-app-linux-converter"
-keywords = ["qubes","QubesOS"]
+keywords = ["qubes","QubesOS","converter"]
+categories = ["QubesOS"]
 
 [[bin]]
 name = "qubes-app-linux-converter-client-gtk"

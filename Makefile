@@ -11,7 +11,7 @@ manpage: qvm-$(NAME).1.gz
 
 install-vm-server:
 	install -d $(DESTDIR)/etc/qubes-rpc
-	ln -s ../../usr/lib/qubes/qubes-app-linux-converter-server $(DESTDIR)/etc/qubes-rpc/qubes.Convert
+	ln -s /usr/bin/qubes-app-linux-converter-server $(DESTDIR)/etc/qubes-rpc/qubes.Convert
 
 install-vm-client: manpage
 	install -d $(DESTDIR)/usr/share/man/man1

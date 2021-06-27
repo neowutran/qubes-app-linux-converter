@@ -19,16 +19,16 @@
  Both projects can improve the other.
 */
 mod common;
-use common::{strict_process_execute, OutputType, IMG_DEPTH};
-use log::debug;
-//use qubes_app_linux_converter_common::{strict_process_execute, OutputType, IMG_DEPTH};
+use common::{strict_process_execute, OutputType};
 use image::io::Reader as ImageReader;
+use log::debug;
 use std::{
     env::temp_dir,
     fs::{self, File},
     io::{self, prelude::*, BufRead},
     net::TcpStream,
     process::{Command, Stdio},
+    sync::mpsc::channel,
     thread, time,
 };
 use uuid::Uuid;
@@ -51,7 +51,7 @@ fn convert_to_png_and_open(file_path: &str) -> image::DynamicImage {
         .unwrap()
 }
 fn send_image(file_path: &str) -> Result<(), Box<dyn std::error::Error>> {
-    debug!("Start send_image: {}",file_path);
+    debug!("Start send_image: {}", file_path);
     // Try to open the image with the image rust library. If it fail, convert it to png with GM and
     // retry.
     let png_image = match ImageReader::open(file_path)?.with_guessed_format() {
@@ -62,7 +62,9 @@ fn send_image(file_path: &str) -> Result<(), Box<dyn std::error::Error>> {
         Err(_) => convert_to_png_and_open(file_path),
     };
     let rgba = png_image.into_rgba8();
+    #[allow(clippy::cast_possible_truncation)]
     let height = rgba.height() as u16;
+    #[allow(clippy::cast_possible_truncation)]
     let width = rgba.width() as u16;
     io::stdout().write_all(&width.to_le_bytes())?;
     io::stdout().write_all(&height.to_le_bytes())?;
@@ -81,19 +83,16 @@ fn convert_pdf(
     for entry in glob::glob(&format!("{}/pg_*.pdf", temporary_directory_file))
         .expect("Failed to read glob pattern")
     {
-        match entry {
-            Ok(path) => {
-                let pngfilename = path.file_stem().unwrap().to_str().unwrap().to_string();
-                let pdftocairo_process = Command::new("pdftocairo")
-                    .args(&[path.to_str().unwrap(), "-png", "-singlefile"])
-                    .current_dir(&temporary_directory_file)
-                    .spawn()
-                    .expect("Unable to launch pdftocairo process");
-                pages.push((pngfilename, pdftocairo_process));
-            }
-            Err(_) => panic!("glob error"),
-        }
+        let path = entry.expect("glob error");
+        let pngfilename = path.file_stem().unwrap().to_str().unwrap().to_string();
+        let pdftocairo_process = Command::new("pdftocairo")
+            .args(&[path.to_str().unwrap(), "-png", "-singlefile"])
+            .current_dir(&temporary_directory_file)
+            .spawn()
+            .expect("Unable to launch pdftocairo process");
+        pages.push((pngfilename, pdftocairo_process));
     }
+    #[allow(clippy::cast_possible_truncation)]
     io::stdout().write_all(&(pages.len() as u16).to_le_bytes())?;
     io::stdout().write_all(&[OutputType::Pdf as u8])?;
 
@@ -159,10 +158,11 @@ fn convert_office(
     debug!("Libreoffice server seems up and ready");
     let no_password_file = format!("{}/{}.nopassword", temporary_directory, TO_CONVERT_FILENAME);
     let source_file = format!("{}/{}", temporary_directory, TO_CONVERT_FILENAME);
-    let mut is_success = false;
-    if !default_password.is_empty() {
-        is_success = decrypt_office_file(&source_file, &no_password_file, port, &default_password);
-    }
+    let mut is_success = if default_password.is_empty() {
+        false
+    } else {
+        decrypt_office_file(&source_file, &no_password_file, port, default_password)
+    };
     while !is_success {
         let password = prompt_password();
         is_success = decrypt_office_file(&source_file, &no_password_file, port, &password);
@@ -267,26 +267,45 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     fs::create_dir_all(&temporary_directory)?;
     let default_password: String = stdin.lock().lines().next().unwrap()?;
     let number_files: u16 = stdin.lock().lines().next().unwrap()?.parse()?;
-    for file_id in 0..number_files {
-        let temporary_directory_file = format!("{}/{}", temporary_directory, file_id);
-        fs::create_dir_all(&temporary_directory_file)?;
-        let number_bytes: usize = stdin.lock().lines().next().unwrap()?.parse()?;
-        debug!("Receiving file, size: {}", number_bytes);
-        let mut buffer = vec![0; number_bytes];
-        stdin.lock().read_exact(&mut buffer)?;
-        debug!("File received");
-        let file_path = format!("{}/{}", &temporary_directory_file, TO_CONVERT_FILENAME);
-        let mut file = File::create(&file_path)?;
-        file.write_all(&buffer)?;
-        debug!("File written to disk");
-        let mimetype: mime::Mime = tree_magic::from_u8(&buffer)
-            .parse()
-            .expect("Incorrect detection of mimetype");
-        debug!("Mime found: {:?}", mimetype);
+    let (tx, rx) = channel();
+    let temporary_directory_clone = temporary_directory.clone();
+    thread::spawn(move || {
+        for file_id in 0..number_files {
+            let temporary_directory_file = format!("{}/{}", &temporary_directory_clone, file_id);
+            fs::create_dir_all(&temporary_directory_file).unwrap();
+            let number_bytes: usize = stdin
+                .lock()
+                .lines()
+                .next()
+                .unwrap()
+                .unwrap()
+                .parse()
+                .unwrap();
+            debug!("Receiving file, size: {}", number_bytes);
+            let mut buffer = vec![0; number_bytes];
+            stdin.lock().read_exact(&mut buffer).unwrap();
+            debug!("File received");
+            let file_path = format!("{}/{}", &temporary_directory_file, TO_CONVERT_FILENAME);
+            let mut file = File::create(&file_path).unwrap();
+            file.write_all(&buffer).unwrap();
+            debug!("File written to disk");
+            let mimetype: mime::Mime = tree_magic::from_u8(&buffer)
+                .parse()
+                .expect("Incorrect detection of mimetype");
+            debug!("Mime found: {:?}", mimetype);
+            tx.send((temporary_directory_file, mimetype)).unwrap();
+        }
+    });
+    for file_info in rx {
+        let temporary_directory_file = file_info.0;
+        let mimetype = file_info.1;
         match (mimetype.type_(), mimetype.subtype()) {
             (mime::AUDIO, _) => panic!("Audio convert not implemented"),
             (mime::VIDEO, _) => panic!("Video convert not implemented"),
-            (mime::IMAGE, _) => convert_image(&file_path)?,
+            (mime::IMAGE, _) => convert_image(&format!(
+                "{}/{}",
+                &temporary_directory_file, &TO_CONVERT_FILENAME
+            ))?,
             (_, mime::PDF) => convert_pdf(&temporary_directory_file, &default_password)?,
             _ => convert_office(&temporary_directory_file, &default_password)?,
         }

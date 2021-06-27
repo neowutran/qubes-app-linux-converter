@@ -1,4 +1,5 @@
-pkgname=(qubes-app-linux-converter-client qubes-app-linux-converter-server)
+basepackagename=$(egrep "^name =" ../Cargo.toml | head -n 1 | cut -d '"' -f 2)
+pkgname=($basepackagename-client $basepackagename-server)
 pkgver=$(egrep "^version" Cargo.toml | head -n 1 | cut -d '"' -f 2)
 pkgrel=1
 arch=(x86_64)
@@ -13,23 +14,17 @@ build() {
  #RUSTUP_TOOLCHAIN=stable cargo build --release --locked --all-features --target-dir=target
  RUSTUP_TOOLCHAIN=stable cargo build --release --all-features --target-dir=target
 }
-#check() {
- # TODO, before this application reach any "releasable" state, remove the "git"
- # dependencies in Cargo.toml and re-add the "--locked" flag.
- #RUSTUP_TOOLCHAIN=stable cargo test --release --locked --target-dir=target
-# RUSTUP_TOOLCHAIN=stable cargo test --release --target-dir=target
-#}
 package_qubes-app-linux-converter-server() {
    depends=(libreoffice graphicsmagick zenity poppler java-commons-lang pdftk bcprov)
    mkdir -p "$pkgdir/usr/bin"
-   install -m 755 target/release/qubes-app-linux-converter-server "$pkgdir"/usr/bin
-   make install-vm-server DESTDIR="$pkgdir/"
+   install -m 755 target/release/$basepackagename-server "$pkgdir"/usr/bin
+   make -C ../ install-vm-server DESTDIR="$pkgdir/"
 
 }
 package_qubes-app-linux-converter-client() {
    depends=(python-nautilus graphicsmagick poppler bcprov gtk4)
    mkdir -p "$pkgdir/usr/bin"
-   install -m 755 target/release/qubes-app-linux-converter-client-cli "$pkgdir"/usr/bin
-   install -m 755 target/release/qubes-app-linux-converter-client-gtk "$pkgdir"/usr/bin
+   install -m 755 target/release/$basepackagename-client-cli "$pkgdir"/usr/bin
+   install -m 755 target/release/$basepackagename-client-gtk "$pkgdir"/usr/bin
    make -C ../ install-vm-client DESTDIR="$pkgdir/"
 }

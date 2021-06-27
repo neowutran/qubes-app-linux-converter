@@ -2,8 +2,8 @@
 #![deny(clippy::mem_forget)]
 
 use log::debug;
+use std::convert::TryFrom;
 
-pub const IMG_DEPTH: u8 = 8;
 pub struct ProcessOutput {
     pub stdout: Vec<u8>,
     pub stderr: Vec<u8>,
@@ -14,23 +14,16 @@ pub enum OutputType {
     Image = 1,
     Pdf = 0,
 }
-impl From<u8> for OutputType {
-    fn from(orig: u8) -> Self {
-        if orig == OutputType::Image as u8 {
-            return OutputType::Image;
+impl TryFrom<u8> for OutputType {
+    type Error = &'static str;
+    fn try_from(orig: u8) -> Result<Self, Self::Error> {
+        if orig == Self::Image as u8 {
+            return Ok(Self::Image);
         }
-        if orig == OutputType::Pdf as u8 {
-            return OutputType::Pdf;
+        if orig == Self::Pdf as u8 {
+            return Ok(Self::Pdf);
         }
-        panic!("Impossible value");
-    }
-}
-impl OutputType {
-    pub fn extension(self) -> &'static str {
-        match self {
-            Self::Pdf => "pdf",
-            Self::Image => "png",
-        }
+        Err("Impossible value")
     }
 }
 pub fn strict_process_execute(binary: &str, args: &[&str]) -> ProcessOutput {
@@ -38,7 +31,7 @@ pub fn strict_process_execute(binary: &str, args: &[&str]) -> ProcessOutput {
     let process = std::process::Command::new(binary)
         .args(args)
         .output()
-        .expect(&format!("Unable to start {} process", binary));
+        .expect("Unable to start process");
     if !process.status.success() {
         debug!(
             "Following process failed: {} {:?}. Panicking ",
