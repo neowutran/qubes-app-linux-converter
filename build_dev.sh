@@ -1,6 +1,5 @@
 #!/bin/bash
 
-# Build
 cargo update
 cargo outdated
 cargo fmt

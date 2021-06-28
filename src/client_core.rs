@@ -26,7 +26,7 @@ const MAX_IMG_SIZE: usize = MAX_IMG_WIDTH * MAX_IMG_HEIGHT * 4;
 const QREXEC_BINARY: &str = "/usr/bin/qrexec-client-vm";
 
 #[cfg(test)]
-const QREXEC_BINARY: &str = "target/release/qubes-app-linux-converter-server";
+const QREXEC_BINARY: &str = "target/release/qubes-converter-server";
 
 #[test]
 fn convert_all_in_one_integration_test() {

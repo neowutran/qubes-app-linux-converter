@@ -1,4 +1,3 @@
-import os
 import subprocess
 
 from gi.repository import Nautilus, GObject

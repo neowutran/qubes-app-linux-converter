@@ -14,14 +14,14 @@ build() {
  #RUSTUP_TOOLCHAIN=stable cargo build --release --locked --all-features --target-dir=target
  RUSTUP_TOOLCHAIN=stable cargo build --release --all-features --target-dir=target
 }
-package_qubes-app-linux-converter-server() {
+package_qubes-converter-server() {
    depends=(libreoffice graphicsmagick zenity poppler java-commons-lang pdftk bcprov)
    mkdir -p "$pkgdir/usr/bin"
    install -m 755 target/release/$basepackagename-server "$pkgdir"/usr/bin
    make -C ../ install-vm-server DESTDIR="$pkgdir/"
 
 }
-package_qubes-app-linux-converter-client() {
+package_qubes-converter-client() {
    depends=(python-nautilus graphicsmagick poppler bcprov gtk4)
    mkdir -p "$pkgdir/usr/bin"
    install -m 755 target/release/$basepackagename-client-cli "$pkgdir"/usr/bin

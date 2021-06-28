@@ -8,10 +8,27 @@ use gio::prelude::*;
 use glib::{clone, Receiver, ToValue};
 use gtk::prelude::*;
 use log::debug;
-use std::thread;
+use std::{thread,fs};
+use clap::{crate_authors, crate_version, AppSettings, Clap};
+use glob::glob;
+
+#[derive(Clap)]
+#[clap(version = crate_version!(), author = crate_authors!())]
+#[clap(setting = AppSettings::ColoredHelp)]
+struct Opts {
+    files: Vec<String>,
+}
 
 fn main() {
     env_logger::init();
+    let opts: Opts = Opts::parse();
+    let mut all_files = Vec::new();
+    for file in opts.files{
+        for entry in glob(&file).expect("Failed to read glob pattern"){
+            let path = entry.expect("glob error");
+            all_files.push(fs::canonicalize(path).unwrap().to_str().unwrap().to_string());
+        }
+    }
     let (transmit_gtk_transmitter, receive_gtk_transmitter) = std::sync::mpsc::channel();
     let (ui_to_controller_transmitter, ui_to_controller_receiver) = std::sync::mpsc::channel();
 
@@ -29,6 +46,8 @@ fn main() {
             controller_to_ui_transmitter.send(event).unwrap();
         }
     });
+    // TODO somehow, GTK try to read the env::args and is not apply if it is not empty. 
+    // Need to find a way to tell GTK that the env::args are not his problem.
     debug!("Starting GTK");
     let application =
         gtk::Application::new(Some("Qubes.converter"), gio::ApplicationFlags::default());
@@ -42,9 +61,10 @@ fn main() {
             application,
             controller_to_ui_receiver,
             ui_to_controller_transmitter.clone(),
+            &all_files
         );
     });
-    application.run();
+    application.run_with_args(&[""]);
 }
 fn connect_launch_button(
     archive_liststore: &gtk::ListStore,
@@ -149,6 +169,7 @@ fn build_ui(
     application: &gtk::Application,
     data_to_ui: Receiver<ConvertEvent>,
     data_from_ui: std::sync::mpsc::Sender<ConvertParameters>,
+    files: &Vec<String>
 ) {
     debug!("reading ui files");
     let parameters_selection_builder =
@@ -179,6 +200,12 @@ fn build_ui(
         .unwrap();
     let default_password: gtk::Entry = parameters_selection_builder.object("default_password").unwrap();
     archive_folder_button.set_label(&default_archive_folder());
+    if !files.is_empty(){
+        file_picker_button.set_label(&files.join("\n"));
+        for file in files{
+            files_liststore.set(&files_liststore.append(), &[(0, &file.as_str())]);
+        }
+    }
     let in_place: gtk::CheckButton = parameters_selection_builder.object("in_place").unwrap();
     let launch_button: gtk::Button = parameters_selection_builder.object("start").unwrap();
 
