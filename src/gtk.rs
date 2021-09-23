@@ -5,12 +5,12 @@ mod common;
 use client_core::{convert_all_files, default_archive_folder, ConvertEvent, ConvertParameters};
 use gio::prelude::*;
 
+use clap::{crate_authors, crate_version, AppSettings, Clap};
 use glib::{clone, Receiver, ToValue};
+use glob::glob;
 use gtk::prelude::*;
 use log::debug;
-use std::{thread,fs};
-use clap::{crate_authors, crate_version, AppSettings, Clap};
-use glob::glob;
+use std::{fs, thread};
 
 #[derive(Clap)]
 #[clap(version = crate_version!(), author = crate_authors!())]
@@ -23,10 +23,16 @@ fn main() {
     env_logger::init();
     let opts: Opts = Opts::parse();
     let mut all_files = Vec::new();
-    for file in opts.files{
-        for entry in glob(&file).expect("Failed to read glob pattern"){
+    for file in opts.files {
+        for entry in glob(&file).expect("Failed to read glob pattern") {
             let path = entry.expect("glob error");
-            all_files.push(fs::canonicalize(path).unwrap().to_str().unwrap().to_string());
+            all_files.push(
+                fs::canonicalize(path)
+                    .unwrap()
+                    .to_str()
+                    .unwrap()
+                    .to_string(),
+            );
         }
     }
     let (transmit_gtk_transmitter, receive_gtk_transmitter) = std::sync::mpsc::channel();
@@ -46,7 +52,7 @@ fn main() {
             controller_to_ui_transmitter.send(event).unwrap();
         }
     });
-    // TODO somehow, GTK try to read the env::args and is not apply if it is not empty. 
+    // TODO somehow, GTK try to read the env::args and is not apply if it is not empty.
     // Need to find a way to tell GTK that the env::args are not his problem.
     debug!("Starting GTK");
     let application =
@@ -61,7 +67,7 @@ fn main() {
             application,
             controller_to_ui_receiver,
             ui_to_controller_transmitter.clone(),
-            &all_files
+            &all_files,
         );
     });
     application.run_with_args(&[""]);
@@ -169,7 +175,7 @@ fn build_ui(
     application: &gtk::Application,
     data_to_ui: Receiver<ConvertEvent>,
     data_from_ui: std::sync::mpsc::Sender<ConvertParameters>,
-    files: &Vec<String>
+    files: &[String],
 ) {
     debug!("reading ui files");
     let parameters_selection_builder =
@@ -198,11 +204,13 @@ fn build_ui(
     let archive_folder_button: gtk::Button = parameters_selection_builder
         .object("archive_folder")
         .unwrap();
-    let default_password: gtk::Entry = parameters_selection_builder.object("default_password").unwrap();
+    let default_password: gtk::Entry = parameters_selection_builder
+        .object("default_password")
+        .unwrap();
     archive_folder_button.set_label(&default_archive_folder());
-    if !files.is_empty(){
+    if !files.is_empty() {
         file_picker_button.set_label(&files.join("\n"));
-        for file in files{
+        for file in files {
             files_liststore.set(&files_liststore.append(), &[(0, &file.as_str())]);
         }
     }
@@ -240,10 +248,8 @@ fn update_convert_status_gui(
     model: &gtk::ListStore,
 ) -> glib::Continue {
     match convert_event {
-        ConvertEvent::FileToConvert{
-            file
-        }=>{
-            let gtk_number_pages:u32 = 0;
+        ConvertEvent::FileToConvert { file } => {
+            let gtk_number_pages: u32 = 0;
             let gtk_current_page: u32 = 0;
             let gtk_percentage_progress: f32 = 0.0;
             let values: [(u32, &dyn ToValue); 5] = [
@@ -251,7 +257,10 @@ fn update_convert_status_gui(
                 (1, &gtk_number_pages),
                 (2, &gtk_current_page),
                 (3, &gtk_percentage_progress),
-                (4, &"Sent to the server, waiting to be converted.".to_string()),
+                (
+                    4,
+                    &"Sent to the server, waiting to be converted.".to_string(),
+                ),
             ];
             model.set(&model.append(), &values);
         }

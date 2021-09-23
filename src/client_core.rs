@@ -4,7 +4,6 @@ use crate::common::{strict_process_execute, OutputType};
 use log::debug;
 use std::{
     convert::{TryFrom, TryInto},
-    env::temp_dir,
     ffi::OsString,
     fs::{self, File},
     io::{Read, Write},
@@ -32,11 +31,8 @@ const QREXEC_BINARY: &str = "target/release/qubes-converter-server";
 fn convert_all_in_one_integration_test() {
     let _ = env_logger::builder().is_test(true).try_init();
     let mut files_that_must_exist = Vec::new();
-    let temporary_directory = format!(
-        "{}/qubes_convert_{}",
-        temp_dir().to_str().unwrap(),
-        Uuid::new_v4()
-    );
+    // We don't use the "/tmp/" directory since it's size is limited and not easily configurable.
+    let temporary_directory = format!("/home/user/.temp_qubes_convert_{}", Uuid::new_v4());
     fs::create_dir_all(&temporary_directory).unwrap();
     let mut files = Vec::new();
     for entry in glob("tests/files/*").expect("Failed to read glob pattern") {
@@ -91,11 +87,7 @@ fn convert_all_in_one_integration_test() {
 #[test]
 fn convert_one_by_one_integration_test() {
     let _ = env_logger::builder().is_test(true).try_init();
-    let temporary_directory = format!(
-        "{}/qubes_convert_{}",
-        temp_dir().to_str().unwrap(),
-        Uuid::new_v4()
-    );
+    let temporary_directory = format!("/home/user/.temp_qubes_convert_{}", Uuid::new_v4());
     fs::create_dir_all(&temporary_directory).unwrap();
     for entry in glob("tests/files/*").expect("Failed to read glob pattern") {
         match entry {
@@ -166,7 +158,7 @@ pub struct ConvertParameters {
 }
 #[derive(Debug)]
 pub enum ConvertEvent {
-    FileToConvert{
+    FileToConvert {
         file: String,
     },
     FileInfo {
@@ -319,15 +311,11 @@ pub fn convert_all_files(
         .args(&["@dispvm", "qubes.Convert"])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
+        //.stderr(Stdio::piped())
         .spawn()
         .expect("Convert server failed to start");
     debug!("{:?}", parameters);
-    let temporary_directory = format!(
-        "{}/qubes_convert_{}",
-        temp_dir().to_str().unwrap(),
-        Uuid::new_v4()
-    );
+    let temporary_directory = format!("/home/user/.temp_qubes_convert_{}", Uuid::new_v4());
     fs::create_dir_all(&temporary_directory)?;
     let archive_path = match &parameters.archive {
         Some(path) => format!("{}/", fs::canonicalize(path).unwrap().to_str().unwrap()),
@@ -345,7 +333,11 @@ pub fn convert_all_files(
     let message_for_ui_emetter_clone = message_for_ui_emetter.clone();
     thread::spawn(move || {
         for (file_id, filename) in files.into_iter().enumerate() {
-            message_for_ui_emetter_clone.send(ConvertEvent::FileToConvert{file: filename.to_string()}).unwrap();
+            message_for_ui_emetter_clone
+                .send(ConvertEvent::FileToConvert {
+                    file: filename.to_string(),
+                })
+                .unwrap();
             debug!("Transmitting file {} to server", filename);
             let temporary_directory_file = format!("{}/{}", &temporary_directory_clone, file_id);
             fs::create_dir_all(&temporary_directory_file).unwrap();

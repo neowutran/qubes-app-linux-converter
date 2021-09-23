@@ -1,0 +1,5 @@
+usr/lib/qubes/druide-antidote-client
+usr/lib/qubes/druide-antidote-server
+usr/share/man/man1/qvm-druide-antidote.1.gz
+usr/bin/qvm-druide-antidote
+etc/qubes-rpc/qubes.DruideAntidote

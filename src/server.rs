@@ -23,11 +23,10 @@ use common::{strict_process_execute, OutputType};
 use image::io::Reader as ImageReader;
 use log::debug;
 use std::{
-    env::temp_dir,
     fs::{self, File},
     io::{self, prelude::*, BufRead},
     net::TcpStream,
-    process::{Command, Stdio},
+    process::{Command, Stdio, Child},
     sync::mpsc::channel,
     thread, time,
 };
@@ -79,10 +78,27 @@ fn convert_pdf(
 ) -> Result<(), Box<dyn std::error::Error>> {
     debug!("Start getting password");
     split_pdf_into_pages(temporary_directory_file, default_password);
-    let mut pages = Vec::new();
+    let mut pages: Vec<(String, Child)> = Vec::new();
+    let max_number_pdftocairo_process = 25;
+    let mut number_pdftocairo_process = 0;
     for entry in glob::glob(&format!("{}/pg_*.pdf", temporary_directory_file))
         .expect("Failed to read glob pattern")
     {
+        while number_pdftocairo_process >= max_number_pdftocairo_process{
+            number_pdftocairo_process = 0;
+            for (pngfilename, pdftocairo_process) in &mut pages{
+                match pdftocairo_process.try_wait(){
+                    Ok(None) => {number_pdftocairo_process += 1; debug!("{}", pngfilename);},
+                    Ok(Some(_)) => {},
+                    Err(_) => debug!("Impossible get pdftocairo process status. Assuming it is not a big issue."),
+                }
+            }
+            debug!("number of pdftocairo process running: {}", number_pdftocairo_process);
+            if number_pdftocairo_process >= max_number_pdftocairo_process{
+                let sleep_time = time::Duration::from_millis(100);
+                thread::sleep(sleep_time);
+            }
+        }
         let path = entry.expect("glob error");
         let pngfilename = path.file_stem().unwrap().to_str().unwrap().to_string();
         let pdftocairo_process = Command::new("pdftocairo")
@@ -91,6 +107,7 @@ fn convert_pdf(
             .spawn()
             .expect("Unable to launch pdftocairo process");
         pages.push((pngfilename, pdftocairo_process));
+        number_pdftocairo_process += 1;
     }
     #[allow(clippy::cast_possible_truncation)]
     io::stdout().write_all(&(pages.len() as u16).to_le_bytes())?;
@@ -98,6 +115,7 @@ fn convert_pdf(
 
     debug!("Start converting PDF pages");
     for (png_page, mut pdftocairo_process) in pages {
+        debug!("sending {}", png_page);
         if !pdftocairo_process.wait().unwrap().success() {
             panic!("pdftocairo process failed");
         }
@@ -129,7 +147,7 @@ fn split_pdf_into_pages(temporary_directory_file: &str, password: &str) {
         .expect("Unable to start pdfinfo process");
     if !pdftk_process.status.success() {
         let password = prompt_password();
-        split_pdf_into_pages(temporary_directory_file, &password)
+        split_pdf_into_pages(temporary_directory_file, &password);
     }
 }
 fn convert_office(
@@ -259,11 +277,7 @@ fn convert_office_file_to_pdf_without_password(
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::init();
     let stdin = io::stdin();
-    let temporary_directory = format!(
-        "{}/qubes_convert_{}",
-        temp_dir().to_str().unwrap(),
-        Uuid::new_v4()
-    );
+    let temporary_directory = format!("/home/user/.temp_qubes_convert_{}", Uuid::new_v4());
     fs::create_dir_all(&temporary_directory)?;
     let default_password: String = stdin.lock().lines().next().unwrap()?;
     let number_files: u16 = stdin.lock().lines().next().unwrap()?.parse()?;
