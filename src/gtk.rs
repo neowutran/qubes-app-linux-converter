@@ -8,7 +8,7 @@ use gio::prelude::*;
 use clap::{crate_authors, crate_version, AppSettings, Clap};
 use glib::{clone, Receiver, ToValue};
 use glob::glob;
-use gtk::prelude::*;
+use gtk4::prelude::*;
 use log::debug;
 use std::{fs, thread};
 
@@ -56,7 +56,7 @@ fn main() {
     // Need to find a way to tell GTK that the env::args are not his problem.
     debug!("Starting GTK");
     let application =
-        gtk::Application::new(Some("Qubes.converter"), gio::ApplicationFlags::default());
+        gtk4::Application::new(Some("Qubes.converter"), gio::ApplicationFlags::default());
     application.connect_activate(move |application| {
         let (controller_to_ui_transmitter, controller_to_ui_receiver) =
             glib::MainContext::channel(glib::PRIORITY_DEFAULT);
@@ -73,14 +73,14 @@ fn main() {
     application.run_with_args(&[""]);
 }
 fn connect_launch_button(
-    archive_liststore: &gtk::ListStore,
-    files_liststore: &gtk::ListStore,
-    follow_convert_status_window: &gtk::ApplicationWindow,
-    define_parameters_window: &gtk::ApplicationWindow,
+    archive_liststore: &gtk4::ListStore,
+    files_liststore: &gtk4::ListStore,
+    follow_convert_status_window: &gtk4::ApplicationWindow,
+    define_parameters_window: &gtk4::ApplicationWindow,
     in_place: bool,
     default_password: String,
     data_from_ui: &std::sync::mpsc::Sender<ConvertParameters>,
-    application: &gtk::Application,
+    application: &gtk4::Application,
 ) {
     debug!("Trying to start converting");
     let mut files = Vec::new();
@@ -110,25 +110,25 @@ fn connect_launch_button(
         })
         .unwrap();
     follow_convert_status_window.set_application(Some(application));
-    let no_application: Option<&gtk::Application> = None;
+    let no_application: Option<&gtk4::Application> = None;
     define_parameters_window.set_application(no_application);
     define_parameters_window.close();
     follow_convert_status_window.show();
 }
 fn connect_archive_folder_chooser_button(
-    archive_liststore: &gtk::ListStore,
-    archive_folder_button: &gtk::Button,
-    window: &gtk::ApplicationWindow,
+    archive_liststore: &gtk4::ListStore,
+    archive_folder_button: &gtk4::Button,
+    window: &gtk4::ApplicationWindow,
 ) {
     debug!("Launching file picker to select archive folder");
-    let file_chooser = gtk::FileChooserNativeBuilder::new()
+    let file_chooser = gtk4::FileChooserNativeBuilder::new()
         .title("Archive folder")
         .transient_for(window)
-        .action(gtk::FileChooserAction::SelectFolder)
+        .action(gtk4::FileChooserAction::SelectFolder)
         .build();
     file_chooser.connect_response(
             clone!(@weak archive_liststore, @weak archive_folder_button ,@strong file_chooser => move |_, r| {
-                if r == gtk::ResponseType::Accept {
+                if r == gtk4::ResponseType::Accept {
                     archive_liststore.clear();
                         let filename = &file_chooser.file().unwrap().path().unwrap().to_str().unwrap().to_string();
                         archive_liststore.set(&archive_liststore.append(), &[(0, &filename)]);
@@ -139,20 +139,20 @@ fn connect_archive_folder_chooser_button(
     file_chooser.show();
 }
 fn connect_files_chooser_button(
-    files_liststore: &gtk::ListStore,
-    files_picker_button: &gtk::Button,
-    window: &gtk::ApplicationWindow,
+    files_liststore: &gtk4::ListStore,
+    files_picker_button: &gtk4::Button,
+    window: &gtk4::ApplicationWindow,
 ) {
     debug!("Launching file picker to select files to convert");
-    let file_chooser = gtk::FileChooserNativeBuilder::new()
+    let file_chooser = gtk4::FileChooserNativeBuilder::new()
         .title("Files to convert")
         .transient_for(window)
         .select_multiple(true)
-        .action(gtk::FileChooserAction::Open)
+        .action(gtk4::FileChooserAction::Open)
         .build();
     file_chooser.connect_response(
             clone!(@weak files_liststore, @weak files_picker_button, @strong file_chooser => move |_, r| {
-                if r == gtk::ResponseType::Accept {
+                if r == gtk4::ResponseType::Accept {
                     let listmodel = file_chooser.files().unwrap();
                     let mut index = 0;
                     files_liststore.clear();
@@ -172,39 +172,39 @@ fn connect_files_chooser_button(
     file_chooser.show();
 }
 fn build_ui(
-    application: &gtk::Application,
+    application: &gtk4::Application,
     data_to_ui: Receiver<ConvertEvent>,
     data_from_ui: std::sync::mpsc::Sender<ConvertParameters>,
     files: &[String],
 ) {
     debug!("reading ui files");
     let parameters_selection_builder =
-        gtk::Builder::from_string(include_str!("../gtk_ui/parameters_selection.ui"));
+        gtk4::Builder::from_string(include_str!("../gtk_ui/parameters_selection.ui"));
     let convert_status_progress_builder =
-        gtk::Builder::from_string(include_str!("../gtk_ui/convert_status_progress.ui"));
+        gtk4::Builder::from_string(include_str!("../gtk_ui/convert_status_progress.ui"));
 
     debug!("Getting UI objects");
-    let define_parameters_window: gtk::ApplicationWindow = parameters_selection_builder
+    let define_parameters_window: gtk4::ApplicationWindow = parameters_selection_builder
         .object("define_parameters_window")
         .unwrap();
     define_parameters_window.set_application(Some(application));
-    let files_liststore: gtk::ListStore = parameters_selection_builder
+    let files_liststore: gtk4::ListStore = parameters_selection_builder
         .object("liststore_files")
         .unwrap();
-    let archive_liststore: gtk::ListStore = parameters_selection_builder
+    let archive_liststore: gtk4::ListStore = parameters_selection_builder
         .object("liststore_archive")
         .unwrap();
-    let follow_convert_status_window: gtk::ApplicationWindow = convert_status_progress_builder
+    let follow_convert_status_window: gtk4::ApplicationWindow = convert_status_progress_builder
         .object("follow_convert_status_window")
         .unwrap();
-    let convert_status_liststore: gtk::ListStore = convert_status_progress_builder
+    let convert_status_liststore: gtk4::ListStore = convert_status_progress_builder
         .object("convert_status_liststore")
         .unwrap();
-    let file_picker_button: gtk::Button = parameters_selection_builder.object("files").unwrap();
-    let archive_folder_button: gtk::Button = parameters_selection_builder
+    let file_picker_button: gtk4::Button = parameters_selection_builder.object("files").unwrap();
+    let archive_folder_button: gtk4::Button = parameters_selection_builder
         .object("archive_folder")
         .unwrap();
-    let default_password: gtk::Entry = parameters_selection_builder
+    let default_password: gtk4::Entry = parameters_selection_builder
         .object("default_password")
         .unwrap();
     archive_folder_button.set_label(&default_archive_folder());
@@ -214,8 +214,8 @@ fn build_ui(
             files_liststore.set(&files_liststore.append(), &[(0, &file.as_str())]);
         }
     }
-    let in_place: gtk::CheckButton = parameters_selection_builder.object("in_place").unwrap();
-    let launch_button: gtk::Button = parameters_selection_builder.object("start").unwrap();
+    let in_place: gtk4::CheckButton = parameters_selection_builder.object("in_place").unwrap();
+    let launch_button: gtk4::Button = parameters_selection_builder.object("start").unwrap();
 
     debug!("Configuring UI events");
     launch_button.connect_clicked(clone!(@weak files_liststore, @weak archive_liststore, @weak define_parameters_window, @weak application, @weak default_password => move |_|{
@@ -245,7 +245,7 @@ fn build_ui(
 
 fn update_convert_status_gui(
     convert_event: &ConvertEvent,
-    model: &gtk::ListStore,
+    model: &gtk4::ListStore,
 ) -> glib::Continue {
     match convert_event {
         ConvertEvent::FileToConvert { file } => {

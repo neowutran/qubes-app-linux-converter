@@ -31,7 +31,9 @@ log = "0"
 env_logger = "0"
 uuid = {version = "0",  features = ["v4"]}
 image = "0"
-clap = "3.0.0-beta.2"
+# TODO, before this software reach any "releasable" state:
+# - Stop using "beta" dependencies
+clap = "3.0.0-beta.4"
 
 # Server
 tree_magic = "0"
@@ -46,29 +48,8 @@ crossterm = "0"
 glob = "0"
 
 # GUI
-# TODO, before this software reach any "releasable" state:
-# - Stop using "git" dependencies
-# - Stop using "beta" dependencies
-[dependencies.gdk]
-default-features = false
-git = "https://github.com/gtk-rs/gtk4-rs"
-package = "gdk4"
-[dependencies.gtk] 
-default-features = false
-git = "https://github.com/gtk-rs/gtk4-rs"
-package = "gtk4"
-
-[dependencies.gtk-macros]
-default-features = false
-version = "0.3.0"
-
-[dependencies.gio]
-default-features = false
-git = "https://github.com/gtk-rs/gtk-rs-core"
-features = ["v2_60"]
-
-[dependencies.glib]
-default-features = false
-git = "https://github.com/gtk-rs/gtk-rs-core"
-features = ["v2_60"]
-
+gdk4 = "0"
+gtk4 = "0"
+gtk-macros = "0"
+gio = "0"
+glib = "0"
