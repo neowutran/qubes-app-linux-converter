@@ -3,7 +3,7 @@
 # Download one GIEC report (3900+ pages)
 test -f ./tests/files/IPCC_AR6_WGI_Full_Report.pdf
 file_exist=$?
-if [ file_exist -eq 0 ]; then
+if [ $file_exist -eq 1 ]; then
 	wget https://www.ipcc.ch/report/ar6/wg1/downloads/report/IPCC_AR6_WGI_Full_Report.pdf -O ./tests/files/IPCC_AR6_WGI_Full_Report.pdf
 fi
 

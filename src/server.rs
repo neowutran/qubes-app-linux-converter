@@ -90,7 +90,6 @@ fn convert_pdf(
                 match pdftocairo_process.try_wait() {
                     Ok(None) => {
                         number_pdftocairo_process += 1;
-                        debug!("{}", pngfilename);
                     }
                     Ok(Some(_)) => {}
                     Err(_) => debug!(
@@ -98,10 +97,6 @@ fn convert_pdf(
                     ),
                 }
             }
-            debug!(
-                "number of pdftocairo process running: {}",
-                number_pdftocairo_process
-            );
             if number_pdftocairo_process >= max_number_pdftocairo_process {
                 let sleep_time = time::Duration::from_millis(100);
                 thread::sleep(sleep_time);

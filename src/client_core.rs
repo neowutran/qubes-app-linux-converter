@@ -32,6 +32,7 @@ fn convert_all_in_one_integration_test() {
     let _ = env_logger::builder().is_test(true).try_init();
     let mut files_that_must_exist = Vec::new();
     // We don't use the "/tmp/" directory since it's size is limited and not easily configurable.
+    // Example: impossible to convert a GIEC report in the 1go /tmp/ fs.
     let temporary_directory = format!("/home/user/.temp_qubes_convert_{}", Uuid::new_v4());
     fs::create_dir_all(&temporary_directory).unwrap();
     let mut files = Vec::new();
@@ -257,12 +258,12 @@ fn convert_one_file(
         output_type,
         number_pages,
     })?;
-    let mut output_files = Vec::new();
+    let mut output_pages = Vec::new();
     for page in 0..number_pages {
         let temporary_file_base_page = format!("{}.{}", temporary_directory, page);
         let converted_page =
             convert_one_page(process_stdout, &temporary_file_base_page, output_type)?;
-        output_files.push(converted_page);
+        output_pages.push(converted_page);
         mpsc_sender.send(ConvertEvent::PageConverted {
             file: source_file.to_string(),
             page,
@@ -271,18 +272,21 @@ fn convert_one_file(
     debug!("CONVERTED ALL PAGES");
     match output_type {
         OutputType::Image => {
-            fs::copy(output_files.get(0).unwrap(), output_file)?;
+            fs::copy(output_pages.get(0).unwrap(), output_file)?;
         }
         OutputType::Pdf => {
-            output_files.push(output_file);
-            if !Command::new("pdfunite")
-                .args(&output_files)
+            let mut pdftk_args = output_pages.clone();
+            pdftk_args.push("cat".to_string());
+            pdftk_args.push("output".to_string());
+            pdftk_args.push(output_file);
+            if !Command::new("pdftk")
+                .args(&pdftk_args)
                 .output()
-                .expect("Unable to launch pdfunite process")
+                .expect("Unable to launch pdftk process")
                 .status
                 .success()
             {
-                panic!("pdfunite failed");
+                panic!("pdftk failed");
             }
         }
     }
