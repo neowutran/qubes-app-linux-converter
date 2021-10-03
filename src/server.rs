@@ -82,6 +82,9 @@ fn convert_pdf(
     let mut pages_name = glob::glob(&format!("{}/pg_*.pdf", temporary_directory_file))
         .expect("Failed to read glob pattern");
     let number_pages = pages_name.by_ref().count();
+    #[allow(clippy::cast_possible_truncation)]
+    io::stdout().write_all(&(number_pages as u16).to_le_bytes())?;
+    io::stdout().write_all(&[OutputType::Pdf as u8])?;
 
     let temporary_directory_file_thread = temporary_directory_file.to_string();
     thread::spawn(move || {
@@ -134,9 +137,6 @@ fn convert_pdf(
             tx.send(pngfilename.to_string()).unwrap();
         }
     });
-    #[allow(clippy::cast_possible_truncation)]
-    io::stdout().write_all(&(number_pages as u16).to_le_bytes())?;
-    io::stdout().write_all(&[OutputType::Pdf as u8])?;
 
     debug!("Start converting PDF pages");
     while let Ok(png_page) = rx.recv() {
