@@ -78,50 +78,69 @@ fn convert_pdf(
 ) -> Result<(), Box<dyn std::error::Error>> {
     debug!("Start getting password");
     split_pdf_into_pages(temporary_directory_file, default_password);
-    let mut pages: Vec<(String, Child)> = Vec::new();
-    let max_number_pdftocairo_process = 25;
-    let mut number_pdftocairo_process = 0;
-    for entry in glob::glob(&format!("{}/pg_*.pdf", temporary_directory_file))
-        .expect("Failed to read glob pattern")
-    {
-        while number_pdftocairo_process >= max_number_pdftocairo_process {
-            number_pdftocairo_process = 0;
-            for (pngfilename, pdftocairo_process) in &mut pages {
-                match pdftocairo_process.try_wait() {
-                    Ok(None) => {
-                        number_pdftocairo_process += 1;
+    let (tx, rx) = channel();
+    let mut pages_name = glob::glob(&format!("{}/pg_*.pdf", temporary_directory_file))
+        .expect("Failed to read glob pattern");
+    let number_pages = pages_name.by_ref().count();
+
+    let temporary_directory_file_thread = temporary_directory_file.to_string();
+    thread::spawn(move || {
+        let max_number_pdftocairo_process = 25;
+        let mut number_pdftocairo_process = 0;
+        let mut pages: Vec<(String, Child)> = Vec::new();
+        for entry in pages_name {
+            // Avoid creating thousands of process when converting really big files.
+            while number_pdftocairo_process >= max_number_pdftocairo_process {
+                number_pdftocairo_process = 0;
+                let mut continous_chain_of_terminated_process = true;
+                let mut to_delete = Vec::new();
+                for (pngfilename, pdftocairo_process) in &mut pages {
+                    match pdftocairo_process
+                        .try_wait()
+                        .expect("pdftocairo process failed")
+                    {
+                        None => {
+                            number_pdftocairo_process += 1;
+                            continous_chain_of_terminated_process = false;
+                        }
+                        Some(_) => {
+                            if continous_chain_of_terminated_process {
+                                to_delete.push((*pngfilename).to_string());
+                                tx.send((*pngfilename).to_string()).unwrap();
+                            }
+                        }
                     }
-                    Ok(Some(_)) => {}
-                    Err(_) => debug!(
-                        "Impossible get pdftocairo process status. Assuming it is not a big issue."
-                    ),
+                }
+                pages.retain(|x| !to_delete.contains(&x.0));
+                if number_pdftocairo_process >= max_number_pdftocairo_process {
+                    let sleep_time = time::Duration::from_millis(100);
+                    thread::sleep(sleep_time);
                 }
             }
-            if number_pdftocairo_process >= max_number_pdftocairo_process {
-                let sleep_time = time::Duration::from_millis(100);
-                thread::sleep(sleep_time);
-            }
+            let path = entry.expect("glob error");
+            let pngfilename = path.file_stem().unwrap().to_str().unwrap().to_string();
+            let pdftocairo_process = Command::new("pdftocairo")
+                .args(&[path.to_str().unwrap(), "-png", "-singlefile"])
+                .current_dir(&temporary_directory_file_thread)
+                .spawn()
+                .expect("Unable to launch pdftocairo process");
+            pages.push((pngfilename, pdftocairo_process));
+            number_pdftocairo_process += 1;
         }
-        let path = entry.expect("glob error");
-        let pngfilename = path.file_stem().unwrap().to_str().unwrap().to_string();
-        let pdftocairo_process = Command::new("pdftocairo")
-            .args(&[path.to_str().unwrap(), "-png", "-singlefile"])
-            .current_dir(&temporary_directory_file)
-            .spawn()
-            .expect("Unable to launch pdftocairo process");
-        pages.push((pngfilename, pdftocairo_process));
-        number_pdftocairo_process += 1;
-    }
+        for (pngfilename, mut pdftocairoprocess) in pages {
+            if !pdftocairoprocess.wait().unwrap().success() {
+                panic!("pdftocairo process failed");
+            }
+            tx.send(pngfilename.to_string()).unwrap();
+        }
+    });
     #[allow(clippy::cast_possible_truncation)]
-    io::stdout().write_all(&(pages.len() as u16).to_le_bytes())?;
+    io::stdout().write_all(&(number_pages as u16).to_le_bytes())?;
     io::stdout().write_all(&[OutputType::Pdf as u8])?;
 
     debug!("Start converting PDF pages");
-    for (png_page, mut pdftocairo_process) in pages {
+    while let Ok(png_page) = rx.recv() {
         debug!("sending {}", png_page);
-        if !pdftocairo_process.wait().unwrap().success() {
-            panic!("pdftocairo process failed");
-        }
         send_image(&format!("{}/{}.png", temporary_directory_file, png_page))?;
     }
     Ok(())
