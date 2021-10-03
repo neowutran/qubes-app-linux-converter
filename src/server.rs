@@ -78,20 +78,20 @@ fn convert_pdf(
 ) -> Result<(), Box<dyn std::error::Error>> {
     debug!("Start getting password");
     split_pdf_into_pages(temporary_directory_file, default_password);
-    let (tx, rx) = channel();
-    let mut pages_name = glob::glob(&format!("{}/pg_*.pdf", temporary_directory_file))
-        .expect("Failed to read glob pattern");
-    let number_pages = pages_name.by_ref().count();
+    let pages_name_paths = glob::glob(&format!("{}/pg_*.pdf", temporary_directory_file)).expect("Failed to read glob pattern");
+    let pages_name: Vec<String> = pages_name_paths.map(|x| x.expect("glob failure").to_str().unwrap().to_string()).collect();
+    debug!("number of pages: {}", pages_name.len());
     #[allow(clippy::cast_possible_truncation)]
-    io::stdout().write_all(&(number_pages as u16).to_le_bytes())?;
+    io::stdout().write_all(&(pages_name.len() as u16).to_le_bytes())?;
     io::stdout().write_all(&[OutputType::Pdf as u8])?;
 
     let temporary_directory_file_thread = temporary_directory_file.to_string();
+    let (tx, rx) = channel();
     thread::spawn(move || {
         let max_number_pdftocairo_process = 25;
         let mut number_pdftocairo_process = 0;
         let mut pages: Vec<(String, Child)> = Vec::new();
-        for entry in pages_name {
+        for path in pages_name {
             // Avoid creating thousands of process when converting really big files.
             while number_pdftocairo_process >= max_number_pdftocairo_process {
                 number_pdftocairo_process = 0;
@@ -120,10 +120,9 @@ fn convert_pdf(
                     thread::sleep(sleep_time);
                 }
             }
-            let path = entry.expect("glob error");
-            let pngfilename = path.file_stem().unwrap().to_str().unwrap().to_string();
+            let pngfilename = std::path::Path::new(&path).file_stem().unwrap().to_str().unwrap().to_string();
             let pdftocairo_process = Command::new("pdftocairo")
-                .args(&[path.to_str().unwrap(), "-png", "-singlefile"])
+                .args(&[&path, "-png", "-singlefile"])
                 .current_dir(&temporary_directory_file_thread)
                 .spawn()
                 .expect("Unable to launch pdftocairo process");

@@ -141,6 +141,44 @@ fn convert_one_by_one_integration_test() {
     }
 }
 
+#[test]
+fn convert_one_big_integration_test() {
+    let _ = env_logger::builder().is_test(true).try_init();
+    let temporary_directory = format!("/home/user/.temp_qubes_convert_{}", Uuid::new_v4());
+    fs::create_dir_all(&temporary_directory).unwrap();
+    let file = "IPCC_AR6_WGI_Full_Report.pdf";
+    let path = format!("tests/files/{}", file);
+    fs::copy(&path, &format!("{}/{}", &temporary_directory, &file)).unwrap();
+    let mimetype: mime::Mime = tree_magic::from_filepath(std::path::Path::new(&path))
+        .parse()
+        .expect("Incorrect detection of mimetype");
+    let mut expected_output_filename =
+        format!("{}/IPCC_AR6_WGI_Full_Report.trusted.", &temporary_directory);
+    expected_output_filename.push_str(match (mimetype.type_(), mimetype.subtype()) {
+        (mime::AUDIO, _) => panic!("Audio convert not implemented"),
+        (mime::VIDEO, _) => panic!("Video convert not implemented"),
+        (mime::IMAGE, _) => "png",
+        _ => "pdf",
+    });
+    match fs::remove_file(&expected_output_filename) {
+        Ok(_) => panic!("Converted file already exist before beginning of the tests !"),
+        Err(_) => {}
+    }
+    let parameters = ConvertParameters {
+        in_place: false,
+        archive: Some(format!("{}/", temporary_directory)),
+        files: vec![format!("{}/{}", &temporary_directory, &file)],
+        default_password: "toor".to_string(),
+    };
+    let (transmitter_convert_events, _receiver_convert_events) = channel();
+    convert_all_files(&transmitter_convert_events, &parameters).unwrap();
+    assert_eq!(
+        true,
+        std::path::Path::new(&expected_output_filename).exists()
+    );
+    fs::remove_file(&expected_output_filename).unwrap();
+}
+
 impl OutputType {
     pub const fn extension(self) -> &'static str {
         match self {
