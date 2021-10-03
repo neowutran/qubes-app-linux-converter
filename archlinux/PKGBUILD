@@ -16,7 +16,6 @@ package_qubes-converter-server() {
    mkdir -p "$pkgdir/usr/bin"
    install -m 755 target/release/$basepackagename-server "$pkgdir"/usr/bin
    make -C ../ install-vm-server DESTDIR="$pkgdir/"
-
 }
 package_qubes-converter-client() {
    depends=(python-nautilus graphicsmagick poppler bcprov gtk4)

@@ -26,7 +26,7 @@ use std::{
     fs::{self, File},
     io::{self, prelude::*, BufRead},
     net::TcpStream,
-    process::{Command, Stdio, Child},
+    process::{Child, Command, Stdio},
     sync::mpsc::channel,
     thread, time,
 };
@@ -84,17 +84,25 @@ fn convert_pdf(
     for entry in glob::glob(&format!("{}/pg_*.pdf", temporary_directory_file))
         .expect("Failed to read glob pattern")
     {
-        while number_pdftocairo_process >= max_number_pdftocairo_process{
+        while number_pdftocairo_process >= max_number_pdftocairo_process {
             number_pdftocairo_process = 0;
-            for (pngfilename, pdftocairo_process) in &mut pages{
-                match pdftocairo_process.try_wait(){
-                    Ok(None) => {number_pdftocairo_process += 1; debug!("{}", pngfilename);},
-                    Ok(Some(_)) => {},
-                    Err(_) => debug!("Impossible get pdftocairo process status. Assuming it is not a big issue."),
+            for (pngfilename, pdftocairo_process) in &mut pages {
+                match pdftocairo_process.try_wait() {
+                    Ok(None) => {
+                        number_pdftocairo_process += 1;
+                        debug!("{}", pngfilename);
+                    }
+                    Ok(Some(_)) => {}
+                    Err(_) => debug!(
+                        "Impossible get pdftocairo process status. Assuming it is not a big issue."
+                    ),
                 }
             }
-            debug!("number of pdftocairo process running: {}", number_pdftocairo_process);
-            if number_pdftocairo_process >= max_number_pdftocairo_process{
+            debug!(
+                "number of pdftocairo process running: {}",
+                number_pdftocairo_process
+            );
+            if number_pdftocairo_process >= max_number_pdftocairo_process {
                 let sleep_time = time::Duration::from_millis(100);
                 thread::sleep(sleep_time);
             }
