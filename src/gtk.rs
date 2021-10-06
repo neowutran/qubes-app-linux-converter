@@ -309,11 +309,11 @@ fn update_convert_status_gui(
                 false
             });
         }
-        ConvertEvent::Failure { file, message: _ } => {
+        ConvertEvent::Failure { file, message } => {
             model.foreach(|_tree_model, _tree_path, tree_iter| {
                 let gtk_filename: String = model.get(tree_iter, 0).get::<String>().unwrap();
                 if &gtk_filename == file {
-                    model.set_value(tree_iter, 4, &"Failure".to_value());
+                    model.set_value(tree_iter, 4, &format!("Failure: {}", message).to_value());
                     return true;
                 }
                 false

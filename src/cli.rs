@@ -95,10 +95,11 @@ fn fancy_ui_main_loop(
                 tui_data.remove(to_remove_id);
                 all_files.retain(|x| *x != file);
             }
-            ConvertEvent::Failure { file, message: _ } => {
+            ConvertEvent::Failure { file, message } => {
                 once_correct_file_found(&file, &mut tui_data, &mut |_, data| {
                     data.failed = true;
                 });
+                eprintln!("{}: Failure, {}", file, message)
             }
         }
         terminal
