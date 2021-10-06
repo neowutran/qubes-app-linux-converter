@@ -224,6 +224,8 @@ pub fn default_archive_folder() -> String {
     )
 }
 fn convert_one_page(
+    mpsc_sender: &Sender<ConvertEvent>,
+    source_file: &str,
     process_stdout: &mut ChildStdout,
     temporary_file_base_page: &str,
     output_type: OutputType,
@@ -239,7 +241,11 @@ fn convert_one_page(
         || width as usize > MAX_IMG_WIDTH
         || width as usize * height as usize * 4 > MAX_IMG_SIZE
     {
-        panic!("Max image size exceeded: Probably DOS attempt");
+        let failure_message = "Max image size exceeded: Probably DOS attempt";
+        mpsc_sender.send(ConvertEvent::Failure{
+        file: source_file.to_string(),
+        message: failure_message.to_string()})?;
+        panic!("{}",failure_message);
     }
 
     debug!("reading page data from server");
@@ -274,7 +280,11 @@ fn convert_one_file(
     let number_pages = u16::from_le_bytes(number_pages_raw);
     if number_pages > MAX_PAGES {
         debug!("Number of page sended by the server: {}", number_pages);
-        panic!("Max page number exceeded: Probably DOS attempt");
+        let failure_message = "Max page number exceeded: Probably DOS attempt";
+        mpsc_sender.send(ConvertEvent::Failure{
+        file: source_file.to_string(), 
+        message: failure_message.to_string()})?;
+        panic!("{}",failure_message);
     }
     let source_file_path = fs::canonicalize(source_file)?;
     let source_file_basename = source_file_path.file_stem().unwrap().to_str().unwrap();
@@ -289,7 +299,12 @@ fn convert_one_file(
     let output_type = OutputType::try_from(*buffer_pages_and_type.get(2).unwrap())?;
     output_file.push_str(output_type.extension());
     if output_type == OutputType::Image && number_pages != 1 {
-        panic!("Image can only be 1 page. Abording.");
+        let failure_message = "Image can only be 1 page. Abording.";
+        mpsc_sender.send(ConvertEvent::Failure{
+            file: source_file.to_string(),
+            message: failure_message.to_string()
+        })?;
+        panic!("{}",failure_message);
     }
     mpsc_sender.send(ConvertEvent::FileInfo {
         file: source_file.to_string(),
@@ -300,7 +315,7 @@ fn convert_one_file(
     for page in 0..number_pages {
         let temporary_file_base_page = format!("{}.{}", temporary_directory, page);
         let converted_page =
-            convert_one_page(process_stdout, &temporary_file_base_page, output_type)?;
+            convert_one_page(mpsc_sender,source_file,process_stdout, &temporary_file_base_page, output_type)?;
         output_pages.push(converted_page);
         mpsc_sender.send(ConvertEvent::PageConverted {
             file: source_file.to_string(),
@@ -317,14 +332,19 @@ fn convert_one_file(
             pdftk_args.push("cat".to_string());
             pdftk_args.push("output".to_string());
             pdftk_args.push(output_file);
-            if !Command::new("pdftk")
+            let command_output = Command::new("pdftk")
                 .args(&pdftk_args)
                 .output()
-                .expect("Unable to launch pdftk process")
-                .status
+                .expect("Unable to launch pdftk process");
+            if command_output.status
                 .success()
             {
-                panic!("pdftk failed");
+                let failure_message = "pdftk failed. Probable cause is 'out of space'. Check with 'df -h'";
+                mpsc_sender.send(ConvertEvent::Failure{
+                file: source_file.to_string(),
+                message: failure_message.to_string()
+                })?;
+                panic!("{}",failure_message);
             }
         }
     }
