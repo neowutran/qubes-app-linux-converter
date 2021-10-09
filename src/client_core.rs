@@ -76,6 +76,7 @@ fn convert_all_in_one_integration_test() {
         archive: Some(format!("{}/", temporary_directory)),
         files,
         default_password: "toor".to_string(),
+        ocr: None
     };
     let (transmitter_convert_events, _receiver_convert_events) = channel();
     convert_all_files(&transmitter_convert_events, &parameters).unwrap();
@@ -127,6 +128,7 @@ fn convert_one_by_one_integration_test() {
                         &temporary_directory, &file_base_name, &file_extension
                     )],
                     default_password: "toor".to_string(),
+                    ocr: None
                 };
                 let (transmitter_convert_events, _receiver_convert_events) = channel();
                 convert_all_files(&transmitter_convert_events, &parameters).unwrap();
@@ -169,6 +171,7 @@ fn convert_one_big_integration_test() {
         archive: Some(format!("{}/", temporary_directory)),
         files: vec![format!("{}/{}", &temporary_directory, &file)],
         default_password: "toor".to_string(),
+        ocr: None
     };
     let (transmitter_convert_events, _receiver_convert_events) = channel();
     convert_all_files(&transmitter_convert_events, &parameters).unwrap();
@@ -194,6 +197,7 @@ pub struct ConvertParameters {
     pub in_place: bool,
     pub archive: Option<String>,
     pub default_password: String,
+    pub ocr: Option<String>
 }
 #[derive(Debug)]
 pub enum ConvertEvent {
@@ -229,6 +233,7 @@ fn convert_one_page(
     process_stdout: &mut ChildStdout,
     temporary_file_base_page: &str,
     output_type: OutputType,
+    ocr: &Option<String>
 ) -> Result<String, Box<dyn std::error::Error>> {
     debug!("reading size and output type from server");
     let mut buffer_size = [0; 2 + 2];
@@ -259,11 +264,29 @@ fn convert_one_page(
     match output_type {
         OutputType::Pdf => {
             let pdf_file_path = format!("{}.pdf", temporary_file_base_page);
-            strict_process_execute("gm", &["convert", &png_file_path, &pdf_file_path]);
+            if let Some(ocr_lang) = ocr{
+                strict_process_execute("tesseract", &[&png_file_path, &temporary_file_base_page, "-l", &ocr_lang, "--dpi", "70", "pdf"]);
+            }else{
+                strict_process_execute("gm", &["convert", &png_file_path, &pdf_file_path]);
+            }
             Ok(pdf_file_path)
         }
         OutputType::Image => Ok(png_file_path),
     }
+}
+pub fn list_ocr_langs()-> Result<Vec<String>, Box<dyn std::error::Error>>{
+    let command_output = Command::new("tesseract").arg("--list-langs").output().expect("Unable to list languages supported by tesseract");
+    let mut result = Vec::new();
+    let stdout = String::from_utf8(command_output.stdout)?;
+    let mut header = true;
+    for line in stdout.lines(){
+        if header{
+            header = false;
+            continue;
+        }
+        result.push(line.to_string());
+    }
+    Ok(result)
 }
 fn convert_one_file(
     mpsc_sender: &Sender<ConvertEvent>,
@@ -315,7 +338,7 @@ fn convert_one_file(
     for page in 0..number_pages {
         let temporary_file_base_page = format!("{}.{}", temporary_directory, page);
         let converted_page =
-            convert_one_page(mpsc_sender,source_file,process_stdout, &temporary_file_base_page, output_type)?;
+            convert_one_page(mpsc_sender,source_file,process_stdout, &temporary_file_base_page, output_type, &parameters.ocr)?;
         output_pages.push(converted_page);
         mpsc_sender.send(ConvertEvent::PageConverted {
             file: source_file.to_string(),
@@ -336,7 +359,7 @@ fn convert_one_file(
                 .args(&pdftk_args)
                 .output()
                 .expect("Unable to launch pdftk process");
-            if command_output.status
+            if !command_output.status
                 .success()
             {
                 let failure_message = "pdftk failed. Probable cause is 'out of space'. Check with 'df -h'";

@@ -2,11 +2,11 @@
 #![deny(clippy::mem_forget)]
 mod client_core;
 mod common;
-use client_core::{convert_all_files, default_archive_folder, ConvertEvent, ConvertParameters};
+use client_core::{convert_all_files, default_archive_folder, ConvertEvent, ConvertParameters, list_ocr_langs};
 use gio::prelude::*;
 
 use clap::{crate_authors, crate_version, AppSettings, Clap};
-use glib::{clone, Receiver, ToValue};
+use glib::{clone, Receiver, ToValue, GString};
 use glob::glob;
 use gtk4::prelude::*;
 use log::debug;
@@ -35,6 +35,11 @@ fn main() {
             );
         }
     }
+    let ocr_languages = match list_ocr_langs(){
+        Err(_) => Vec::new(),
+        Ok(langs) => langs
+
+    };
     let (transmit_gtk_transmitter, receive_gtk_transmitter) = std::sync::mpsc::channel();
     let (ui_to_controller_transmitter, ui_to_controller_receiver) = std::sync::mpsc::channel();
 
@@ -68,6 +73,7 @@ fn main() {
             controller_to_ui_receiver,
             ui_to_controller_transmitter.clone(),
             &all_files,
+            &ocr_languages
         );
     });
     application.run_with_args(&[""]);
@@ -81,6 +87,7 @@ fn connect_launch_button(
     default_password: String,
     data_from_ui: &std::sync::mpsc::Sender<ConvertParameters>,
     application: &gtk4::Application,
+    ocr_language: Option<GString>
 ) {
     debug!("Trying to start converting");
     let mut files = Vec::new();
@@ -98,6 +105,10 @@ fn connect_launch_button(
     if files.is_empty() {
         return;
     }
+    let ocr = match ocr_language{
+        None => None,
+        Some(o) => Some(o.to_string())
+    };
     data_from_ui
         .send(ConvertParameters {
             in_place,
@@ -107,6 +118,7 @@ fn connect_launch_button(
                 None => default_archive_folder(),
             }),
             files,
+            ocr
         })
         .unwrap();
     follow_convert_status_window.set_application(Some(application));
@@ -176,6 +188,7 @@ fn build_ui(
     data_to_ui: Receiver<ConvertEvent>,
     data_from_ui: std::sync::mpsc::Sender<ConvertParameters>,
     files: &[String],
+    ocr_languages: &[String],
 ) {
     debug!("reading ui files");
     let parameters_selection_builder =
@@ -193,6 +206,9 @@ fn build_ui(
         .unwrap();
     let archive_liststore: gtk4::ListStore = parameters_selection_builder
         .object("liststore_archive")
+        .unwrap();
+    let ocr_language_combo: gtk4::ComboBoxText = parameters_selection_builder
+        .object("ocr_language")
         .unwrap();
     let follow_convert_status_window: gtk4::ApplicationWindow = convert_status_progress_builder
         .object("follow_convert_status_window")
@@ -214,12 +230,16 @@ fn build_ui(
             files_liststore.set(&files_liststore.append(), &[(0, &file.as_str())]);
         }
     }
+    for language in ocr_languages{
+        ocr_language_combo.append_text(&language.as_str());
+    }
     let in_place: gtk4::CheckButton = parameters_selection_builder.object("in_place").unwrap();
     let launch_button: gtk4::Button = parameters_selection_builder.object("start").unwrap();
 
     debug!("Configuring UI events");
-    launch_button.connect_clicked(clone!(@weak files_liststore, @weak archive_liststore, @weak define_parameters_window, @weak application, @weak default_password => move |_|{
-        connect_launch_button(&archive_liststore, &files_liststore, &follow_convert_status_window, &define_parameters_window, in_place.is_active(), default_password.text().to_string(), &data_from_ui, &application);
+
+    launch_button.connect_clicked(clone!(@weak ocr_language_combo ,@weak files_liststore, @weak archive_liststore, @weak define_parameters_window, @weak application, @weak default_password => move |_|{
+        connect_launch_button(&archive_liststore, &files_liststore, &follow_convert_status_window, &define_parameters_window, in_place.is_active(), default_password.text().to_string(), &data_from_ui, &application, ocr_language_combo.active_text());
     }));
 
     data_to_ui.attach(

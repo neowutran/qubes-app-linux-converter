@@ -3,7 +3,7 @@
 mod client_core;
 mod common;
 use clap::{crate_authors, crate_version, AppSettings, Clap};
-use client_core::{convert_all_files, ConvertEvent, ConvertParameters};
+use client_core::{convert_all_files, ConvertEvent, ConvertParameters, list_ocr_langs};
 use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
@@ -24,6 +24,7 @@ use tui::{
 #[derive(Clap)]
 #[clap(version = crate_version!(), author = crate_authors!())]
 #[clap(setting = AppSettings::ColoredHelp)]
+#[clap(setting = AppSettings::ArgRequiredElseHelp)]
 struct Opts {
     #[clap(required = true)]
     files: Vec<String>,
@@ -35,6 +36,10 @@ struct Opts {
     archive: Option<String>,
     #[clap(short, long)]
     default_password: Option<String>,
+    #[clap(short, long)]
+    ocr_lang: Option<String>,
+    #[clap(short, long)]
+    list_ocr_langs: bool,
 }
 struct FancyTuiData {
     filename: String,
@@ -126,7 +131,7 @@ fn fancy_ui_main_loop(
                     let gauge = Gauge::default()
                         .block(
                             Block::default()
-                                .title(data.filename.to_string())
+                                .title(format!("{} ({}/{})", data.filename, data.current_page, data.number_pages))
                                 .borders(Borders::ALL),
                         )
                         .gauge_style(Style::default().fg(color))
@@ -181,6 +186,14 @@ fn non_fancy_ui(receiver_convert_events: Receiver<ConvertEvent>, all_files: &mut
 fn main() {
     env_logger::init();
     let opts: Opts = Opts::parse();
+    if opts.list_ocr_langs{
+        let langs = list_ocr_langs().unwrap();
+        println!("List of language supported by your tesseract installation: ");
+        for lang in langs{
+            println!("{}", lang);
+        }
+        return;
+    }
     let mut all_files = Vec::new();
     {
         let files = opts.files;
@@ -202,6 +215,7 @@ fn main() {
         archive: opts.archive,
         files: all_files.clone(),
         default_password: opts.default_password.unwrap_or_default(),
+        ocr: opts.ocr_lang
     };
     let (transmitter_convert_events, receiver_convert_events) = mpsc::channel();
     thread::spawn(move || {

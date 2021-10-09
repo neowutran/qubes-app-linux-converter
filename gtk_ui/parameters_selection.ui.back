@@ -1,6 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <interface>
   <requires lib="gtk" version="4.0"/>
+  <object class="GtkListStore" id="liststore_ocr_languages">
+    <columns>
+      <column type="gint"/>
+      <column type="gchararray"/>
+    </columns>
+  </object>
   <object class="GtkApplicationWindow" id="define_parameters_window">
     <child>
       <object class="GtkBox">
@@ -22,8 +28,9 @@
                   </object>
                 </child>
                 <child>
-                  <object class="GtkComboBoxText" id="ocr_language">
+                  <object class="GtkComboBox" id="ocr_language">
                     <layout>
+                      <property name="model">liststore_ocr_languages</property>
                       <property name="column">1</property>
                       <property name="row">3</property>
                     </layout>
