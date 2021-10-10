@@ -2,11 +2,13 @@
 #![deny(clippy::mem_forget)]
 mod client_core;
 mod common;
-use client_core::{convert_all_files, default_archive_folder, ConvertEvent, ConvertParameters, list_ocr_langs};
+use client_core::{
+    convert_all_files, default_archive_folder, list_ocr_langs, ConvertEvent, ConvertParameters,
+};
 use gio::prelude::*;
 
 use clap::{crate_authors, crate_version, AppSettings, Clap};
-use glib::{clone, Receiver, ToValue, GString};
+use glib::{clone, GString, Receiver, ToValue};
 use glob::glob;
 use gtk4::prelude::*;
 use log::debug;
@@ -35,10 +37,9 @@ fn main() {
             );
         }
     }
-    let ocr_languages = match list_ocr_langs(){
+    let ocr_languages = match list_ocr_langs() {
         Err(_) => Vec::new(),
-        Ok(langs) => langs
-
+        Ok(langs) => langs,
     };
     let (transmit_gtk_transmitter, receive_gtk_transmitter) = std::sync::mpsc::channel();
     let (ui_to_controller_transmitter, ui_to_controller_receiver) = std::sync::mpsc::channel();
@@ -73,7 +74,7 @@ fn main() {
             controller_to_ui_receiver,
             ui_to_controller_transmitter.clone(),
             &all_files,
-            &ocr_languages
+            &ocr_languages,
         );
     });
     application.run_with_args(&[""]);
@@ -87,7 +88,7 @@ fn connect_launch_button(
     default_password: String,
     data_from_ui: &std::sync::mpsc::Sender<ConvertParameters>,
     application: &gtk4::Application,
-    ocr_language: Option<GString>
+    ocr_language: Option<GString>,
 ) {
     debug!("Trying to start converting");
     let mut files = Vec::new();
@@ -105,10 +106,7 @@ fn connect_launch_button(
     if files.is_empty() {
         return;
     }
-    let ocr = match ocr_language{
-        None => None,
-        Some(o) => Some(o.to_string())
-    };
+    let ocr = ocr_language.map(|o| o.to_string());
     data_from_ui
         .send(ConvertParameters {
             in_place,
@@ -118,7 +116,8 @@ fn connect_launch_button(
                 None => default_archive_folder(),
             }),
             files,
-            ocr
+            ocr,
+            number_tesseract_process: 1,
         })
         .unwrap();
     follow_convert_status_window.set_application(Some(application));
@@ -207,9 +206,8 @@ fn build_ui(
     let archive_liststore: gtk4::ListStore = parameters_selection_builder
         .object("liststore_archive")
         .unwrap();
-    let ocr_language_combo: gtk4::ComboBoxText = parameters_selection_builder
-        .object("ocr_language")
-        .unwrap();
+    let ocr_language_combo: gtk4::ComboBoxText =
+        parameters_selection_builder.object("ocr_language").unwrap();
     let follow_convert_status_window: gtk4::ApplicationWindow = convert_status_progress_builder
         .object("follow_convert_status_window")
         .unwrap();
@@ -230,8 +228,8 @@ fn build_ui(
             files_liststore.set(&files_liststore.append(), &[(0, &file.as_str())]);
         }
     }
-    for language in ocr_languages{
-        ocr_language_combo.append_text(&language.as_str());
+    for language in ocr_languages {
+        ocr_language_combo.append_text(language.as_str());
     }
     let in_place: gtk4::CheckButton = parameters_selection_builder.object("in_place").unwrap();
     let launch_button: gtk4::Button = parameters_selection_builder.object("start").unwrap();
@@ -306,12 +304,17 @@ fn update_convert_status_gui(
                 if &gtk_filename == file {
                     let total_page = model.get(tree_iter, 1).get::<u32>().unwrap();
                     debug!("PageConverted. {}: {}/{}", &file, &page, &total_page);
-                    let gtk_page = u32::from(*page);
+                    let gtk_page = model.get(tree_iter, 2).get::<u32>().unwrap() + 1;
                     #[allow(clippy::cast_possible_truncation)]
                     let percentage: f32 =
-                        (f32::from(*page) + 1.0) * 100.0 / (f32::from(total_page as u16));
+                        (f32::from(gtk_page as u16) + 1.0) * 100.0 / (f32::from(total_page as u16));
                     model.set_value(tree_iter, 2, &gtk_page.to_value());
                     model.set_value(tree_iter, 3, &percentage.to_value());
+                    model.set_value(
+                        tree_iter,
+                        4,
+                        &format!("Ongoing {}/{}", gtk_page, total_page).to_value(),
+                    );
                     return true;
                 }
                 false

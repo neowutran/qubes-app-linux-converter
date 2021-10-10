@@ -19,7 +19,7 @@
  Both projects can improve the other.
 */
 mod common;
-use common::{strict_process_execute, OutputType};
+use common::OutputType;
 use image::io::Reader as ImageReader;
 use log::debug;
 use std::{
@@ -32,6 +32,28 @@ use std::{
 };
 use uuid::Uuid;
 
+pub struct ProcessOutput {
+    pub stdout: Vec<u8>,
+    pub stderr: Vec<u8>,
+}
+fn strict_process_execute(binary: &str, args: &[&str]) -> ProcessOutput {
+    debug!("{}: {:?}", binary, args);
+    let process = std::process::Command::new(binary)
+        .args(args)
+        .output()
+        .expect("Unable to start process");
+    if !process.status.success() {
+        debug!(
+            "Following process failed: {} {:?}. Panicking ",
+            binary, args
+        );
+        debug!("{}", String::from_utf8_lossy(&process.stderr));
+    }
+    ProcessOutput {
+        stdout: process.stdout,
+        stderr: process.stderr,
+    }
+}
 fn convert_image(file_path: &str) -> Result<(), Box<dyn std::error::Error>> {
     debug!("Start converting image");
     let number_pages: u16 = 1;
@@ -78,8 +100,11 @@ fn convert_pdf(
 ) -> Result<(), Box<dyn std::error::Error>> {
     debug!("Start getting password");
     split_pdf_into_pages(temporary_directory_file, default_password);
-    let pages_name_paths = glob::glob(&format!("{}/pg_*.pdf", temporary_directory_file)).expect("Failed to read glob pattern");
-    let pages_name: Vec<String> = pages_name_paths.map(|x| x.expect("glob failure").to_str().unwrap().to_string()).collect();
+    let pages_name_paths = glob::glob(&format!("{}/pg_*.pdf", temporary_directory_file))
+        .expect("Failed to read glob pattern");
+    let pages_name: Vec<String> = pages_name_paths
+        .map(|x| x.expect("glob failure").to_str().unwrap().to_string())
+        .collect();
     debug!("number of pages: {}", pages_name.len());
     #[allow(clippy::cast_possible_truncation)]
     io::stdout().write_all(&(pages_name.len() as u16).to_le_bytes())?;
@@ -120,7 +145,12 @@ fn convert_pdf(
                     thread::sleep(sleep_time);
                 }
             }
-            let pngfilename = std::path::Path::new(&path).file_stem().unwrap().to_str().unwrap().to_string();
+            let pngfilename = std::path::Path::new(&path)
+                .file_stem()
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .to_string();
             let pdftocairo_process = Command::new("pdftocairo")
                 .args(&[&path, "-png", "-singlefile"])
                 .current_dir(&temporary_directory_file_thread)

@@ -3,7 +3,7 @@
 mod client_core;
 mod common;
 use clap::{crate_authors, crate_version, AppSettings, Clap};
-use client_core::{convert_all_files, ConvertEvent, ConvertParameters, list_ocr_langs};
+use client_core::{convert_all_files, list_ocr_langs, ConvertEvent, ConvertParameters};
 use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
@@ -40,6 +40,8 @@ struct Opts {
     ocr_lang: Option<String>,
     #[clap(short, long)]
     list_ocr_langs: bool,
+    #[clap(short, long, default_value = "1")]
+    number_ocr_process: u8,
 }
 struct FancyTuiData {
     filename: String,
@@ -87,9 +89,9 @@ fn fancy_ui_main_loop(
                 data.number_pages = number_pages;
                 data.started = true;
             }),
-            ConvertEvent::PageConverted { file, page } => {
+            ConvertEvent::PageConverted { file, .. } => {
                 once_correct_file_found(&file, &mut tui_data, &mut |_, data| {
-                    data.current_page = page;
+                    data.current_page += 1;
                 });
             }
             ConvertEvent::FileConverted { file } => {
@@ -104,7 +106,7 @@ fn fancy_ui_main_loop(
                 once_correct_file_found(&file, &mut tui_data, &mut |_, data| {
                     data.failed = true;
                 });
-                eprintln!("{}: Failure, {}", file, message)
+                eprintln!("{}: Failure, {}", file, message);
             }
         }
         terminal
@@ -131,7 +133,10 @@ fn fancy_ui_main_loop(
                     let gauge = Gauge::default()
                         .block(
                             Block::default()
-                                .title(format!("{} ({}/{})", data.filename, data.current_page, data.number_pages))
+                                .title(format!(
+                                    "{} ({}/{})",
+                                    data.filename, data.current_page, data.number_pages
+                                ))
                                 .borders(Borders::ALL),
                         )
                         .gauge_style(Style::default().fg(color))
@@ -186,10 +191,10 @@ fn non_fancy_ui(receiver_convert_events: Receiver<ConvertEvent>, all_files: &mut
 fn main() {
     env_logger::init();
     let opts: Opts = Opts::parse();
-    if opts.list_ocr_langs{
+    if opts.list_ocr_langs {
         let langs = list_ocr_langs().unwrap();
         println!("List of language supported by your tesseract installation: ");
-        for lang in langs{
+        for lang in langs {
             println!("{}", lang);
         }
         return;
@@ -215,7 +220,8 @@ fn main() {
         archive: opts.archive,
         files: all_files.clone(),
         default_password: opts.default_password.unwrap_or_default(),
-        ocr: opts.ocr_lang
+        number_tesseract_process: opts.number_ocr_process,
+        ocr: opts.ocr_lang,
     };
     let (transmitter_convert_events, receiver_convert_events) = mpsc::channel();
     thread::spawn(move || {

@@ -1,15 +1,16 @@
 #![forbid(unsafe_code)]
 #![deny(clippy::mem_forget)]
-use crate::common::{strict_process_execute, OutputType};
+use crate::common::OutputType;
 use log::debug;
 use std::{
+    collections::HashMap,
     convert::{TryFrom, TryInto},
     ffi::OsString,
     fs::{self, File},
     io::{Read, Write},
-    process::{ChildStdout, Command, Stdio},
+    process::{Child, ChildStdout, Command, Stdio},
     sync::mpsc::{channel, Sender},
-    thread,
+    thread, time,
 };
 use uuid::Uuid;
 
@@ -76,7 +77,8 @@ fn convert_all_in_one_integration_test() {
         archive: Some(format!("{}/", temporary_directory)),
         files,
         default_password: "toor".to_string(),
-        ocr: None
+        number_tesseract_process: 1,
+        ocr: None,
     };
     let (transmitter_convert_events, _receiver_convert_events) = channel();
     convert_all_files(&transmitter_convert_events, &parameters).unwrap();
@@ -128,7 +130,8 @@ fn convert_one_by_one_integration_test() {
                         &temporary_directory, &file_base_name, &file_extension
                     )],
                     default_password: "toor".to_string(),
-                    ocr: None
+                    number_tesseract_process: 1,
+                    ocr: None,
                 };
                 let (transmitter_convert_events, _receiver_convert_events) = channel();
                 convert_all_files(&transmitter_convert_events, &parameters).unwrap();
@@ -171,7 +174,8 @@ fn convert_one_big_integration_test() {
         archive: Some(format!("{}/", temporary_directory)),
         files: vec![format!("{}/{}", &temporary_directory, &file)],
         default_password: "toor".to_string(),
-        ocr: None
+        number_tesseract_process: 1,
+        ocr: None,
     };
     let (transmitter_convert_events, _receiver_convert_events) = channel();
     convert_all_files(&transmitter_convert_events, &parameters).unwrap();
@@ -197,7 +201,8 @@ pub struct ConvertParameters {
     pub in_place: bool,
     pub archive: Option<String>,
     pub default_password: String,
-    pub ocr: Option<String>
+    pub number_tesseract_process: u8,
+    pub ocr: Option<String>,
 }
 #[derive(Debug)]
 pub enum ConvertEvent {
@@ -233,8 +238,8 @@ fn convert_one_page(
     process_stdout: &mut ChildStdout,
     temporary_file_base_page: &str,
     output_type: OutputType,
-    ocr: &Option<String>
-) -> Result<String, Box<dyn std::error::Error>> {
+    ocr: &Option<String>,
+) -> Result<(String, Option<Child>), Box<dyn std::error::Error>> {
     debug!("reading size and output type from server");
     let mut buffer_size = [0; 2 + 2];
     process_stdout.read_exact(&mut buffer_size)?;
@@ -247,10 +252,11 @@ fn convert_one_page(
         || width as usize * height as usize * 4 > MAX_IMG_SIZE
     {
         let failure_message = "Max image size exceeded: Probably DOS attempt";
-        mpsc_sender.send(ConvertEvent::Failure{
-        file: source_file.to_string(),
-        message: failure_message.to_string()})?;
-        panic!("{}",failure_message);
+        mpsc_sender.send(ConvertEvent::Failure {
+            file: source_file.to_string(),
+            message: failure_message.to_string(),
+        })?;
+        panic!("{}", failure_message);
     }
 
     debug!("reading page data from server");
@@ -264,23 +270,42 @@ fn convert_one_page(
     match output_type {
         OutputType::Pdf => {
             let pdf_file_path = format!("{}.pdf", temporary_file_base_page);
-            if let Some(ocr_lang) = ocr{
-                strict_process_execute("tesseract", &[&png_file_path, &temporary_file_base_page, "-l", &ocr_lang, "--dpi", "70", "pdf"]);
-            }else{
-                strict_process_execute("gm", &["convert", &png_file_path, &pdf_file_path]);
+            let mut process_name = "gm";
+            let mut process_args = vec!["convert", &png_file_path, &pdf_file_path];
+            if let Some(ocr_lang) = ocr {
+                process_name = "tesseract";
+                process_args = vec![
+                    &png_file_path,
+                    temporary_file_base_page,
+                    "-l",
+                    ocr_lang,
+                    "--dpi",
+                    "70",
+                    "pdf",
+                ];
+            } else {
             }
-            Ok(pdf_file_path)
+            let convert_to_pdf_process = Command::new(process_name)
+                .args(&process_args)
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .spawn()
+                .expect("Unable to launch the 'convert to pdf' process (tesseract/gm)");
+            Ok((pdf_file_path, Some(convert_to_pdf_process)))
         }
-        OutputType::Image => Ok(png_file_path),
+        OutputType::Image => Ok((png_file_path, None)),
     }
 }
-pub fn list_ocr_langs()-> Result<Vec<String>, Box<dyn std::error::Error>>{
-    let command_output = Command::new("tesseract").arg("--list-langs").output().expect("Unable to list languages supported by tesseract");
+pub fn list_ocr_langs() -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    let command_output = Command::new("tesseract")
+        .arg("--list-langs")
+        .output()
+        .expect("Unable to list languages supported by tesseract");
     let mut result = Vec::new();
     let stdout = String::from_utf8(command_output.stdout)?;
     let mut header = true;
-    for line in stdout.lines(){
-        if header{
+    for line in stdout.lines() {
+        if header {
             header = false;
             continue;
         }
@@ -288,6 +313,85 @@ pub fn list_ocr_langs()-> Result<Vec<String>, Box<dyn std::error::Error>>{
     }
     Ok(result)
 }
+
+fn convert_all_pages(
+    mpsc_sender: &Sender<ConvertEvent>,
+    process_stdout: &mut ChildStdout,
+    source_file: &str,
+    temporary_directory: &str,
+    parameters: &ConvertParameters,
+    output_type: OutputType,
+    number_pages: u16,
+) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    let mut output_pages = Vec::new();
+    let mut all_pages_convert_process: HashMap<u16, (String, Option<Child>)> = HashMap::new();
+
+    // TODO
+    // Tesseract process require gigantic amount of memory.
+    // Memory starving tesseract process will slow down everything and result in much MUCH worse
+    // performance (freezing, some kind of deadlock and crashing included).
+    // So the optimal amount of concurrent tesseract seems to be a computation between number of
+    // CPU physical core available and memory available.
+    //
+    // On my particular setup (highend gaming setup from late 2017, 8 physical core and 32 go ram)
+    // , "2" seems to be the best number for the fastest conversion.
+    // This number will vary depending on the hardware.
+    // In case of doubt, less tesseract process is better than more tesseract process.
+    let maximum_number_process = parameters.number_tesseract_process;
+
+    for page in 0..number_pages {
+        while all_pages_convert_process.len() >= maximum_number_process.into() {
+            let keys: Vec<u16> = all_pages_convert_process.keys().copied().collect();
+            for page_convert_key in keys {
+                let mut page_convert_process =
+                    all_pages_convert_process.remove(&page_convert_key).unwrap();
+                let page_path = page_convert_process.0.to_string();
+                let mut page_converted = true;
+                if let Some(ref mut process) = page_convert_process.1 {
+                    if process.try_wait().expect("'try_wait' failed").is_none() {
+                        all_pages_convert_process.insert(page_convert_key, page_convert_process);
+                        page_converted = false;
+                    }
+                }
+                if page_converted {
+                    debug!("Sending page converted information");
+                    output_pages.push(page_path);
+                    mpsc_sender.send(ConvertEvent::PageConverted {
+                        file: source_file.to_string(),
+                        page: page_convert_key,
+                    })?;
+                }
+            }
+            if all_pages_convert_process.keys().len() >= maximum_number_process.into() {
+                debug!("sleeping");
+                let sleep_time = time::Duration::from_millis(1000);
+                thread::sleep(sleep_time);
+            }
+        }
+        let temporary_file_base_page = format!("{}.{}", temporary_directory, page);
+        let converted_page = convert_one_page(
+            mpsc_sender,
+            source_file,
+            process_stdout,
+            &temporary_file_base_page,
+            output_type,
+            &parameters.ocr,
+        )?;
+        all_pages_convert_process.insert(page, converted_page);
+    }
+    for (page_convert_key, page_convert_process) in all_pages_convert_process {
+        if let Some(mut process) = page_convert_process.1 {
+            process.wait()?;
+        }
+        output_pages.push(page_convert_process.0.to_string());
+        mpsc_sender.send(ConvertEvent::PageConverted {
+            file: source_file.to_string(),
+            page: page_convert_key,
+        })?;
+    }
+    Ok(output_pages)
+}
+
 fn convert_one_file(
     mpsc_sender: &Sender<ConvertEvent>,
     process_stdout: &mut ChildStdout,
@@ -304,10 +408,11 @@ fn convert_one_file(
     if number_pages > MAX_PAGES {
         debug!("Number of page sended by the server: {}", number_pages);
         let failure_message = "Max page number exceeded: Probably DOS attempt";
-        mpsc_sender.send(ConvertEvent::Failure{
-        file: source_file.to_string(), 
-        message: failure_message.to_string()})?;
-        panic!("{}",failure_message);
+        mpsc_sender.send(ConvertEvent::Failure {
+            file: source_file.to_string(),
+            message: failure_message.to_string(),
+        })?;
+        panic!("{}", failure_message);
     }
     let source_file_path = fs::canonicalize(source_file)?;
     let source_file_basename = source_file_path.file_stem().unwrap().to_str().unwrap();
@@ -323,35 +428,35 @@ fn convert_one_file(
     output_file.push_str(output_type.extension());
     if output_type == OutputType::Image && number_pages != 1 {
         let failure_message = "Image can only be 1 page. Abording.";
-        mpsc_sender.send(ConvertEvent::Failure{
+        mpsc_sender.send(ConvertEvent::Failure {
             file: source_file.to_string(),
-            message: failure_message.to_string()
+            message: failure_message.to_string(),
         })?;
-        panic!("{}",failure_message);
+        panic!("{}", failure_message);
     }
     mpsc_sender.send(ConvertEvent::FileInfo {
         file: source_file.to_string(),
         output_type,
         number_pages,
     })?;
-    let mut output_pages = Vec::new();
-    for page in 0..number_pages {
-        let temporary_file_base_page = format!("{}.{}", temporary_directory, page);
-        let converted_page =
-            convert_one_page(mpsc_sender,source_file,process_stdout, &temporary_file_base_page, output_type, &parameters.ocr)?;
-        output_pages.push(converted_page);
-        mpsc_sender.send(ConvertEvent::PageConverted {
-            file: source_file.to_string(),
-            page,
-        })?;
-    }
+
+    let output_pages = convert_all_pages(
+        mpsc_sender,
+        process_stdout,
+        source_file,
+        temporary_directory,
+        parameters,
+        output_type,
+        number_pages,
+    )?;
+
     debug!("CONVERTED ALL PAGES");
     match output_type {
         OutputType::Image => {
             fs::copy(output_pages.get(0).unwrap(), output_file)?;
         }
         OutputType::Pdf => {
-            let mut pdftk_args = output_pages.clone();
+            let mut pdftk_args = output_pages;
             pdftk_args.push("cat".to_string());
             pdftk_args.push("output".to_string());
             pdftk_args.push(output_file);
@@ -359,15 +464,14 @@ fn convert_one_file(
                 .args(&pdftk_args)
                 .output()
                 .expect("Unable to launch pdftk process");
-            if !command_output.status
-                .success()
-            {
-                let failure_message = "pdftk failed. Probable cause is 'out of space'. Check with 'df -h'";
-                mpsc_sender.send(ConvertEvent::Failure{
-                file: source_file.to_string(),
-                message: failure_message.to_string()
+            if !command_output.status.success() {
+                let failure_message =
+                    "pdftk failed. Probable cause is 'out of space'. Check with 'df -h'";
+                mpsc_sender.send(ConvertEvent::Failure {
+                    file: source_file.to_string(),
+                    message: failure_message.to_string(),
                 })?;
-                panic!("{}",failure_message);
+                panic!("{}", failure_message);
             }
         }
     }
