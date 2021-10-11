@@ -1,5 +1,6 @@
+#!/bin/bash
 if [ $# -ne 1 ]; then
  exit 1
 fi
 
-/usr/bin/qubes-app-linux-converter-client-gtk "$@"
+/usr/bin/qubes-converter-client-gtk "$@"

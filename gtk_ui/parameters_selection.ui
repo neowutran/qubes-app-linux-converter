@@ -2,6 +2,7 @@
 <interface>
   <requires lib="gtk" version="4.0"/>
   <object class="GtkApplicationWindow" id="define_parameters_window">
+        <property name="title">Qubes Converter - Parameters</property>
     <child>
       <object class="GtkBox">
         <property name="orientation">vertical</property>

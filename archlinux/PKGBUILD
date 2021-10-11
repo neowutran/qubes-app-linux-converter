@@ -20,6 +20,7 @@ package_qubes-converter-server() {
 }
 package_qubes-converter-client() {
    depends=(python-nautilus bcprov pdftk java-commons-lang gtk4)
+   optdepends=('tesseract: Text search support through OCR' 'tesseract-data: Text search support through OCR (languages)')
    mkdir -p "$pkgdir/usr/bin"
    install -m 755 target/release/$basepackagename-client-cli "$pkgdir"/usr/bin
    install -m 755 target/release/$basepackagename-client-gtk "$pkgdir"/usr/bin

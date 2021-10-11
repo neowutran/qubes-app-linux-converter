@@ -11,6 +11,7 @@
     </columns>
   </object>
   <object class="GtkApplicationWindow" id="follow_convert_status_window">
+        <property name="title">Qubes Converter - Status</property>
     <child>
       <object class="GtkTreeView" id="convert_status_treeview">
         <property name="model">convert_status_liststore</property>
