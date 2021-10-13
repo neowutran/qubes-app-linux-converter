@@ -11,4 +11,4 @@ fi
 # Using "release" to not loose too much time, and to be close from reality.
 cargo build --release
 
-RUST_LOG=debug cargo test --release
+RUST_TEST_THREADS=1 RUST_LOG=debug cargo test --release

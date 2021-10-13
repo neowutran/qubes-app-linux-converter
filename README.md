@@ -1,19 +1,25 @@
 IMPORTANT
 ==========
-In development, do not use it.
+!!! In development, do not use it. !!!
+
+Status: Standard cases are working. Many non "standard" cases work. Currently
+testing before a first stable version.
 
 Goals before reaching any 'usable' state:
-- Improve my skills in rust
-- Provide all the functionnalities of "qubes-app-linux-pdf-converter"
-- Provide all the functionnalities of my -- currently -- pull request https://github.com/QubesOS/qubes-app-linux-pdf-converter/pull/9
-- Provide most important functionnalities of "qubes-app-linux-img-converter"
-- Add a basic GTK gui 
-- Eventually try to raise my UI skills from 0 to non 0
-- Archlinux packaging for Qubes OS
+- Improve my skills in rust: In progress
+- Provide all the functionnalities of "qubes-app-linux-pdf-converter": Done
+- Provide all the functionnalities of my -- currently -- pull request
+  https://github.com/QubesOS/qubes-app-linux-pdf-converter/pull/9 : Done
+- Provide most important functionnalities of "qubes-app-linux-img-converter":
+  Done
+- Add a basic GTK gui: Done (it's ugly but it work)
+- Eventually try to raise my UI skills from 0 to non 0 (Uh.)
+- Archlinux packaging for Qubes OS (Done)
+- Dom0 packaging for Qubes OS (Mostly done, not tested.)
 - Split the software in 2 packages: client and server. The server will require
 a lot of dependencies. So the goals is to be able to install the client (who
 does not require a lot of dependencies) in a different Qubes Template VM than
-the server.
+the server. (Done, but, TODO, check if it is still really usefull.)
 
 Extended goals:
 - Sound converter 

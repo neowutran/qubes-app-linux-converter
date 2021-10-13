@@ -31,7 +31,7 @@ log = "0"
 env_logger = "0"
 uuid = {version = "0",  features = ["v4"]}
 image = "0"
-num_cpus = "1"
+num_cpus = "0"
 # TODO, before this software reach any "releasable" state:
 # - Stop using "beta" dependencies
 clap = "3.0.0-beta.4"

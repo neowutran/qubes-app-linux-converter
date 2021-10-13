@@ -52,7 +52,7 @@ fn main() {
         let (backend_to_controller_transmitter, backend_to_controller_receiver) =
             std::sync::mpsc::channel();
         thread::spawn(move || {
-            convert_all_files(&backend_to_controller_transmitter, &parameters).unwrap();
+            convert_all_files(&backend_to_controller_transmitter, parameters).unwrap();
         });
         for event in backend_to_controller_receiver {
             controller_to_ui_transmitter.send(event).unwrap();
@@ -116,8 +116,9 @@ fn connect_launch_button(
                 None => default_archive_folder(),
             }),
             files,
+            max_pages_converted_in_parallele: 1,
             ocr,
-            number_tesseract_process: 1,
+            stderr: true,
         })
         .unwrap();
     follow_convert_status_window.set_application(Some(application));

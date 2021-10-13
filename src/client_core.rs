@@ -32,8 +32,6 @@ const QREXEC_BINARY: &str = "target/release/qubes-converter-server";
 fn convert_all_in_one_integration_test() {
     let _ = env_logger::builder().is_test(true).try_init();
     let mut files_that_must_exist = Vec::new();
-    // We don't use the "/tmp/" directory since it's size is limited and not easily configurable.
-    // Example: impossible to convert a GIEC report in the 1go /tmp/ fs.
     let temporary_directory = format!("/home/user/.temp_qubes_convert_{}", Uuid::new_v4());
     fs::create_dir_all(&temporary_directory).unwrap();
     let mut files = Vec::new();
@@ -77,11 +75,12 @@ fn convert_all_in_one_integration_test() {
         archive: Some(format!("{}/", temporary_directory)),
         files,
         default_password: "toor".to_string(),
-        number_tesseract_process: 1,
+        max_pages_converted_in_parallele: 1,
         ocr: None,
+        stderr: true,
     };
     let (transmitter_convert_events, _receiver_convert_events) = channel();
-    convert_all_files(&transmitter_convert_events, &parameters).unwrap();
+    convert_all_files(&transmitter_convert_events, parameters).unwrap();
     for file_that_must_exist in files_that_must_exist {
         assert_eq!(true, std::path::Path::new(&file_that_must_exist.0).exists());
         fs::remove_file(&file_that_must_exist.0).unwrap();
@@ -130,11 +129,12 @@ fn convert_one_by_one_integration_test() {
                         &temporary_directory, &file_base_name, &file_extension
                     )],
                     default_password: "toor".to_string(),
-                    number_tesseract_process: 1,
+                    max_pages_converted_in_parallele: 1,
                     ocr: None,
+                    stderr: true,
                 };
                 let (transmitter_convert_events, _receiver_convert_events) = channel();
-                convert_all_files(&transmitter_convert_events, &parameters).unwrap();
+                convert_all_files(&transmitter_convert_events, parameters).unwrap();
                 assert_eq!(
                     true,
                     std::path::Path::new(&expected_output_filename).exists()
@@ -174,8 +174,9 @@ fn convert_one_big_integration_test() {
         archive: Some(format!("{}/", temporary_directory)),
         files: vec![format!("{}/{}", &temporary_directory, &file)],
         default_password: "toor".to_string(),
-        number_tesseract_process: 1,
+        max_pages_converted_in_parallele: 4,
         ocr: None,
+        stderr: true,
     };
     let (transmitter_convert_events, _receiver_convert_events) = channel();
     convert_all_files(&transmitter_convert_events, &parameters).unwrap();
@@ -201,8 +202,9 @@ pub struct ConvertParameters {
     pub in_place: bool,
     pub archive: Option<String>,
     pub default_password: String,
-    pub number_tesseract_process: u8,
+    pub max_pages_converted_in_parallele: u8,
     pub ocr: Option<String>,
+    pub stderr: bool,
 }
 #[derive(Debug)]
 pub enum ConvertEvent {
@@ -300,7 +302,9 @@ pub fn list_ocr_langs() -> Result<Vec<String>, Box<dyn std::error::Error>> {
     let command_output = Command::new("tesseract")
         .arg("--list-langs")
         .output()
-        .expect("Unable to list languages supported by tesseract");
+        .expect(
+            "Unable to list languages supported by tesseract. Tesseract is probably not installed.",
+        );
     let mut result = Vec::new();
     let stdout = String::from_utf8(command_output.stdout)?;
     let mut header = true;
@@ -326,7 +330,6 @@ fn convert_all_pages(
     let mut output_pages = Vec::new();
     let mut all_pages_convert_process: HashMap<u16, (String, Option<Child>)> = HashMap::new();
 
-    // TODO
     // Tesseract process require gigantic amount of memory.
     // Memory starving tesseract process will slow down everything and result in much MUCH worse
     // performance (freezing, some kind of deadlock and crashing included).
@@ -334,22 +337,24 @@ fn convert_all_pages(
     // CPU physical core available and memory available.
     //
     // On my particular setup (highend gaming setup from late 2017, 8 physical core and 32 go ram)
-    // , "2" seems to be the best number for the fastest conversion.
+    // , "3" seems to be the best number for the fastest conversion.
     // This number will vary depending on the hardware.
     // In case of doubt, less tesseract process is better than more tesseract process.
-    let maximum_number_process = parameters.number_tesseract_process;
+    let maximum_number_process = parameters.max_pages_converted_in_parallele;
 
     for page in 0..number_pages {
         while all_pages_convert_process.len() >= maximum_number_process.into() {
-            let keys: Vec<u16> = all_pages_convert_process.keys().copied().collect();
-            for page_convert_key in keys {
-                let mut page_convert_process =
-                    all_pages_convert_process.remove(&page_convert_key).unwrap();
+            for page_id in all_pages_convert_process
+                .keys()
+                .copied()
+                .collect::<Vec<u16>>()
+            {
+                let mut page_convert_process = all_pages_convert_process.remove(&page_id).unwrap();
                 let page_path = page_convert_process.0.to_string();
                 let mut page_converted = true;
                 if let Some(ref mut process) = page_convert_process.1 {
                     if process.try_wait().expect("'try_wait' failed").is_none() {
-                        all_pages_convert_process.insert(page_convert_key, page_convert_process);
+                        all_pages_convert_process.insert(page_id, page_convert_process);
                         page_converted = false;
                     }
                 }
@@ -358,13 +363,13 @@ fn convert_all_pages(
                     output_pages.push(page_path);
                     mpsc_sender.send(ConvertEvent::PageConverted {
                         file: source_file.to_string(),
-                        page: page_convert_key,
+                        page: page_id,
                     })?;
                 }
             }
             if all_pages_convert_process.keys().len() >= maximum_number_process.into() {
                 debug!("sleeping");
-                let sleep_time = time::Duration::from_millis(1000);
+                let sleep_time = time::Duration::from_millis(200);
                 thread::sleep(sleep_time);
             }
         }
@@ -379,14 +384,14 @@ fn convert_all_pages(
         )?;
         all_pages_convert_process.insert(page, converted_page);
     }
-    for (page_convert_key, page_convert_process) in all_pages_convert_process {
+    for (page_id, page_convert_process) in all_pages_convert_process {
         if let Some(mut process) = page_convert_process.1 {
             process.wait()?;
         }
         output_pages.push(page_convert_process.0.to_string());
         mpsc_sender.send(ConvertEvent::PageConverted {
             file: source_file.to_string(),
-            page: page_convert_key,
+            page: page_id,
         })?;
     }
     Ok(output_pages)
@@ -494,16 +499,24 @@ fn convert_one_file(
 }
 pub fn convert_all_files(
     message_for_ui_emetter: &Sender<ConvertEvent>,
-    parameters: &ConvertParameters,
+    mut parameters: ConvertParameters,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let mut server_process = Command::new(QREXEC_BINARY)
+    let mut server_process = Command::new(QREXEC_BINARY);
+    server_process
         .args(&["@dispvm", "qubes.Convert"])
         .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        //.stderr(Stdio::piped())
+        .stdout(Stdio::piped());
+    if !parameters.stderr {
+        server_process.stderr(Stdio::null());
+    }
+    let mut server_process = server_process
         .spawn()
         .expect("Convert server failed to start");
+    parameters.max_pages_converted_in_parallele = if parameters.ocr.is_some() {parameters.max_pages_converted_in_parallele}else{(num_cpus::get()*2).try_into().unwrap()};
     debug!("{:?}", parameters);
+
+    // We don't use the "/tmp/" directory since it's size is limited and not easily configurable.
+    // Example: impossible to convert a GIEC report in the 1go /tmp/ fs.
     let temporary_directory = format!("/home/user/.temp_qubes_convert_{}", Uuid::new_v4());
     fs::create_dir_all(&temporary_directory)?;
     let archive_path = match &parameters.archive {
@@ -549,7 +562,7 @@ pub fn convert_all_files(
             &mut server_process_stdout,
             &filename,
             &temporary_directory_file,
-            parameters,
+            &parameters,
             &archive_path,
         ) {
             message_for_ui_emetter.send(ConvertEvent::Failure {

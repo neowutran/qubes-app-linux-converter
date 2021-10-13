@@ -193,9 +193,14 @@ fn split_pdf_into_pages(temporary_directory_file: &str, password: &str) {
     let pdftk_process = Command::new("pdftk")
         .args(&[&to_split, "input_pw", password, "burst"])
         .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
         .current_dir(temporary_directory_file)
         .output()
         .expect("Unable to start pdfinfo process");
+    debug!(
+        "pdftk stderr: {}",
+        String::from_utf8_lossy(&pdftk_process.stderr)
+    );
     if !pdftk_process.status.success() {
         let password = prompt_password();
         split_pdf_into_pages(temporary_directory_file, &password);

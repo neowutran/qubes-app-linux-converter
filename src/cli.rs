@@ -10,6 +10,7 @@ use crossterm::{
 };
 use glob::glob;
 use std::{
+    convert::TryInto,
     io,
     sync::mpsc::{self, Receiver},
     thread,
@@ -41,7 +42,7 @@ struct Opts {
     #[clap(short, long)]
     list_ocr_langs: bool,
     #[clap(short, long, default_value = "1")]
-    number_ocr_process: u8,
+    max_pages_converted_in_parallele_tesseract: u8,
 }
 struct FancyTuiData {
     filename: String,
@@ -125,8 +126,8 @@ fn fancy_ui_main_loop(
                     } else {
                         Color::Blue
                     };
-                    let percent = if data.started {
-                        &data.current_page * 100 / data.number_pages
+                    let percent: u32 = if data.started {
+                        u32::from(data.current_page) * 100 / u32::from(data.number_pages)
                     } else {
                         0
                     };
@@ -140,7 +141,7 @@ fn fancy_ui_main_loop(
                                 .borders(Borders::ALL),
                         )
                         .gauge_style(Style::default().fg(color))
-                        .percent(percent);
+                        .percent(percent.try_into().unwrap());
                     f.render_widget(gauge, chunks[chunk]);
                 }
             })
@@ -220,12 +221,13 @@ fn main() {
         archive: opts.archive,
         files: all_files.clone(),
         default_password: opts.default_password.unwrap_or_default(),
-        number_tesseract_process: opts.number_ocr_process,
+        max_pages_converted_in_parallele: opts.max_pages_converted_in_parallele_tesseract,
         ocr: opts.ocr_lang,
+        stderr: opts.no_fancy_ui,
     };
     let (transmitter_convert_events, receiver_convert_events) = mpsc::channel();
     thread::spawn(move || {
-        convert_all_files(&transmitter_convert_events, &parameters).unwrap();
+        convert_all_files(&transmitter_convert_events, parameters).unwrap();
     });
 
     if opts.no_fancy_ui {
