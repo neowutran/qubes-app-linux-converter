@@ -85,6 +85,7 @@ fn convert_all_in_one_integration_test() {
         assert_eq!(true, std::path::Path::new(&file_that_must_exist.0).exists());
         fs::remove_file(&file_that_must_exist.0).unwrap();
     }
+    fs::remove_dir_all(&temporary_directory).unwrap();
 }
 
 #[test]
@@ -144,6 +145,7 @@ fn convert_one_by_one_integration_test() {
             Err(_e) => panic!("glob error"),
         }
     }
+    fs::remove_dir_all(&temporary_directory).unwrap();
 }
 
 #[test]
@@ -179,12 +181,13 @@ fn convert_one_big_integration_test() {
         stderr: true,
     };
     let (transmitter_convert_events, _receiver_convert_events) = channel();
-    convert_all_files(&transmitter_convert_events, &parameters).unwrap();
+    convert_all_files(&transmitter_convert_events, parameters).unwrap();
     assert_eq!(
         true,
         std::path::Path::new(&expected_output_filename).exists()
     );
     fs::remove_file(&expected_output_filename).unwrap();
+    fs::remove_dir_all(&temporary_directory).unwrap();
 }
 
 impl OutputType {
