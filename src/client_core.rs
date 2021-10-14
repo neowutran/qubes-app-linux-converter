@@ -515,7 +515,7 @@ pub fn convert_all_files(
     let mut server_process = server_process
         .spawn()
         .expect("Convert server failed to start");
-    parameters.max_pages_converted_in_parallele = if parameters.ocr.is_some() {parameters.max_pages_converted_in_parallele}else{(num_cpus::get()*2).try_into().unwrap()};
+    parameters.max_pages_converted_in_parallele = if parameters.ocr.is_some() {parameters.max_pages_converted_in_parallele}else{(num_cpus::get()).try_into().unwrap()};
     debug!("{:?}", parameters);
 
     // We don't use the "/tmp/" directory since it's size is limited and not easily configurable.
