@@ -1,9 +1,9 @@
 #![forbid(unsafe_code)]
 #![deny(clippy::mem_forget)]
-mod client_core;
-mod common;
-use clap::{crate_authors, crate_version, AppSettings, Clap};
-use client_core::{convert_all_files, list_ocr_langs, ConvertEvent, ConvertParameters};
+use qubes_converter_client;
+use qubes_converter_common;
+use clap::{AppSettings, Parser};
+use qubes_converter_client::{convert_all_files, list_ocr_langs, ConvertEvent, ConvertParameters};
 use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
@@ -22,9 +22,9 @@ use tui::{
     widgets::{Block, Borders, Gauge},
     Terminal,
 };
-#[derive(Clap)]
-#[clap(version = crate_version!(), author = crate_authors!())]
-#[clap(setting = AppSettings::ColoredHelp)]
+//#[clap(setting = AppSettings::ColoredHelp)]
+#[derive(Parser)]
+#[clap(version, about, author)]
 #[clap(setting = AppSettings::ArgRequiredElseHelp)]
 struct Opts {
     #[clap(required = true)]
@@ -37,7 +37,7 @@ struct Opts {
     archive: Option<String>,
     #[clap(short, long)]
     default_password: Option<String>,
-    #[clap(short, long)]
+    #[clap(short, long, help = "TODO")]
     ocr_lang: Option<String>,
     #[clap(short, long)]
     list_ocr_langs: bool,
@@ -48,7 +48,7 @@ struct FancyTuiData {
     filename: String,
     number_pages: u16,
     current_page: u16,
-    output_type: Option<common::OutputType>,
+    output_type: Option<qubes_converter_common::OutputType>,
     failed: bool,
     started: bool,
 }

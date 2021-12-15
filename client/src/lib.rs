@@ -1,6 +1,6 @@
 #![forbid(unsafe_code)]
 #![deny(clippy::mem_forget)]
-use crate::common::OutputType;
+use qubes_converter_common::OutputType;
 use log::debug;
 use std::{
     collections::HashMap,
@@ -190,15 +190,6 @@ fn convert_one_big_integration_test() {
     fs::remove_dir_all(&temporary_directory).unwrap();
 }
 
-impl OutputType {
-    pub const fn extension(self) -> &'static str {
-        match self {
-            Self::Pdf => "pdf",
-            Self::Image => "png",
-        }
-    }
-}
-
 #[derive(Debug, Clone)]
 pub struct ConvertParameters {
     pub files: Vec<String>,
@@ -288,7 +279,6 @@ fn convert_one_page(
                     "70",
                     "pdf",
                 ];
-            } else {
             }
             let convert_to_pdf_process = Command::new(process_name)
                 .args(&process_args)
@@ -515,7 +505,11 @@ pub fn convert_all_files(
     let mut server_process = server_process
         .spawn()
         .expect("Convert server failed to start");
-    parameters.max_pages_converted_in_parallele = if parameters.ocr.is_some() {parameters.max_pages_converted_in_parallele}else{(num_cpus::get()).try_into().unwrap()};
+    parameters.max_pages_converted_in_parallele = if parameters.ocr.is_some() {
+        parameters.max_pages_converted_in_parallele
+    } else {
+        (num_cpus::get()).try_into().unwrap()
+    };
     debug!("{:?}", parameters);
 
     // We don't use the "/tmp/" directory since it's size is limited and not easily configurable.
@@ -528,7 +522,7 @@ pub fn convert_all_files(
     };
     fs::create_dir_all(&archive_path)?;
     let mut server_process_stdin = server_process.stdin.take().unwrap();
-    let mut server_process_stdout = server_process.stdout.as_mut().unwrap();
+    let server_process_stdout = server_process.stdout.as_mut().unwrap();
 
     server_process_stdin.write_all(format!("{}\n", parameters.default_password).as_bytes())?;
     server_process_stdin.write_all(format!("{}\n", parameters.files.len()).as_bytes())?;
@@ -562,7 +556,7 @@ pub fn convert_all_files(
         let temporary_directory_file = file_info.1;
         if let Err(e) = convert_one_file(
             message_for_ui_emetter,
-            &mut server_process_stdout,
+            server_process_stdout,
             &filename,
             &temporary_directory_file,
             &parameters,

@@ -9,6 +9,14 @@ pub enum OutputType {
     Image = 1,
     Pdf = 0,
 }
+ impl OutputType {
+      pub const fn extension(self) -> &'static str {
+          match self {
+              Self::Pdf => "pdf",
+              Self::Image => "png",
+          }
+      }
+  }
 impl TryFrom<u8> for OutputType {
     type Error = &'static str;
     fn try_from(orig: u8) -> Result<Self, Self::Error> {

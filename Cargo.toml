@@ -1,56 +1,65 @@
-[package]
+[packaging]
 name = "qubes-converter"
 version = "0.1.0"
 authors = ["Neowutran <qubes@neowutran.ovh>"]
-edition = "2018"
 description = "Qubes application - Convert untrusted files to trustable files"
 license = "GPL-3.0"
-readme = "readme.md"
 repository = "https://github.com/neowutran/qubes-app-linux-converter"
-keywords = ["qubes","QubesOS","converter"]
-categories = ["QubesOS"]
 
-[[bin]]
-name = "qubes-converter-client-gtk"
-path = "src/gtk.rs"
-
-[[bin]]
-name = "qubes-converter-client-cli"
-path = "src/cli.rs"
-
-[[bin]]
-name = "qubes-converter-server"
-path = "src/server.rs"
+#[package]
+#name = "qubes-converter"
+#version = "0.1.0"
+#authors = ["Neowutran <qubes@neowutran.ovh>"]
+#edition = "2021"
+#description = "Qubes application - Convert untrusted files to trustable files"
+#license = "GPL-3.0"
+#readme = "readme.md"
+#repository = "https://github.com/neowutran/qubes-app-linux-converter"
+#keywords = ["qubes","QubesOS","converter"]
+#categories = ["QubesOS"]
 
 # TODO once https://github.com/rust-lang/cargo/issues/1982 have been fixed,
 # specify dependencies for each binary
-[dependencies]
+#[dependencies]
 
 # Common
-log = "0"
-env_logger = "0"
-uuid = {version = "0",  features = ["v4"]}
-image = "0"
-num_cpus = "0"
+#log = "0"
+#env_logger = "0"
+#uuid = {version = "0",  features = ["v4"]}
+#image = "0"
+#num_cpus = "1"
 # TODO, before this software reach any "releasable" state:
 # - Stop using "beta" dependencies
-clap = "3.0.0-beta.4"
+#clap = {version = "3.0.0-rc.4", features = ["derive", "default"]}
 
 # Server
-tree_magic = "0"
-mime = "0"
+#tree_magic = "0"
+#mime = "0"
 
 # Core
-home = "0"
+#home = "0"
 
 # Cli
-tui = {version = "0", features = ["crossterm"]}
-crossterm = "0"
-glob = "0"
+#tui = {version = "0", features = ["crossterm"]}
+#crossterm = "0"
+#glob = "0"
 
 # GUI
-gdk4 = "0"
-gtk4 = "0"
-gtk-macros = "0"
-gio = "0"
-glib = "0"
+#gdk4 = "0"
+#gtk4 = "0"
+#gtk-macros = "0"
+#gio = "0"
+#glib = "0"
+
+#[package.metadata.deb]
+#depends = "poppler-utils, libreoffice, graphicsmagick,python3,python3-nautilus | python-nautilus, libgtk-4.1, pdftk, zenity"
+#recommends = "tesseract-ocr"
+
+[workspace]
+members = [
+	"gtk",
+	"cli",
+	"client",
+	"server",
+	"common"
+]

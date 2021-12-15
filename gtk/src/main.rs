@@ -1,22 +1,20 @@
 #![forbid(unsafe_code)]
 #![deny(clippy::mem_forget)]
-mod client_core;
-mod common;
-use client_core::{
+use qubes_converter_client::{
     convert_all_files, default_archive_folder, list_ocr_langs, ConvertEvent, ConvertParameters,
 };
 use gio::prelude::*;
 
-use clap::{crate_authors, crate_version, AppSettings, Clap};
+use clap::Parser;
 use glib::{clone, GString, Receiver, ToValue};
 use glob::glob;
 use gtk4::prelude::*;
 use log::debug;
 use std::{fs, thread};
 
-#[derive(Clap)]
-#[clap(version = crate_version!(), author = crate_authors!())]
-#[clap(setting = AppSettings::ColoredHelp)]
+//#[clap(setting = AppSettings::ColoredHelp)]
+#[derive(Parser)]
+#[clap(version, author)]
 struct Opts {
     files: Vec<String>,
 }

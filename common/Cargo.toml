@@ -1,0 +1,38 @@
+[package]
+name = "qubes-converter-common"
+version = "0.1.0"
+authors = ["Neowutran <qubes@neowutran.ovh>"]
+edition = "2021"
+description = "Qubes application - Convert untrusted files to trustable files"
+license = "GPL-3.0"
+
+[dependencies]
+
+# Common
+log = "0"
+env_logger = "0"
+uuid = {version = "0",  features = ["v4"]}
+image = "0"
+num_cpus = "1"
+# TODO, before this software reach any "releasable" state:
+# - Stop using "beta" dependencies
+clap = {version = "3.0.0-rc.4", features = ["derive", "default"]}
+
+# Server
+tree_magic = "0"
+mime = "0"
+
+# Core
+home = "0"
+
+# Cli
+tui = {version = "0", features = ["crossterm"]}
+crossterm = "0"
+glob = "0"
+
+# GUI
+gdk4 = "0"
+gtk4 = "0"
+gtk-macros = "0"
+gio = "0"
+glib = "0"

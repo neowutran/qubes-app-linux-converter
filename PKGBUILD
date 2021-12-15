@@ -9,8 +9,7 @@ license=(GPL)
 makedepends=(pandoc rustup gtk4)
 
 build() {
- #RUSTUP_TOOLCHAIN=stable cargo build --release --locked --all-features --target-dir=target
- RUSTUP_TOOLCHAIN=stable cargo build --release --all-features --target-dir=target
+ RUSTUP_TOOLCHAIN=stable cargo build --release --locked --all-features --target-dir=target
 }
 package_qubes-converter-server() {
    depends=(libreoffice graphicsmagick zenity poppler java-commons-lang pdftk bcprov)
