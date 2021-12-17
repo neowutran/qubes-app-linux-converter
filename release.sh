@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # archlinux
-makepkg
+#makepkg
 
 # debian
 ( cd ./cli && cargo deb )
@@ -9,6 +9,6 @@ makepkg
 ( cd ./server && cargo deb )
 
 # fedora
-( cd ./cli && cargo rpm build )
-( cd ./gtk && cargo rpm build )
-( cd ./server && cargo rpm build )
+#( cd ./cli && cargo rpm build )
+#( cd ./gtk && cargo rpm build )
+#( cd ./server && cargo rpm build )

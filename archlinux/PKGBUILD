@@ -13,15 +13,10 @@ build() {
 }
 package_qubes-converter-server() {
    depends=(libreoffice graphicsmagick zenity poppler java-commons-lang pdftk bcprov)
-   mkdir -p "$pkgdir/usr/bin"
-   install -m 755 target/release/$basepackagename-server "$pkgdir"/usr/bin
    make -C ../ install-vm-server DESTDIR="$pkgdir/"
 }
 package_qubes-converter-client() {
    depends=(python-nautilus bcprov pdftk java-commons-lang gtk4)
    optdepends=('tesseract: Text search support through OCR' 'tesseract-data: Text search support through OCR (languages)')
-   mkdir -p "$pkgdir/usr/bin"
-   install -m 755 target/release/$basepackagename-client-cli "$pkgdir"/usr/bin
-   install -m 755 target/release/$basepackagename-client-gtk "$pkgdir"/usr/bin
    make -C ../ install-vm-client DESTDIR="$pkgdir/"
 }

@@ -1,0 +1,54 @@
+%global crate qubes-converter
+
+Name:           %{crate}
+Version:        0.1.0
+Release:        %autorelease
+Summary:        Qubes application - Convert untrusted files to trustable files
+License:        GPLv3
+ExclusiveArch:  %{rust_arches}
+BuildRequires:  rust-packaging glib2-devel cairo-devel cairo-gobject-devel graphene-devel pango-devel gdk-pixbuf2-devel gtk4-devel
+
+%global _description %{expand:
+Qubes application - Convert untrusted files to trustable files.}
+
+%description %{_description}
+
+%prep
+cp -Rf %{_sourcedir} %{crate}-0.1.0
+
+%build
+RUSTUP_TOOLCHAIN=stable cargo build --release --locked --all-features --target-dir=target
+
+%install
+make install-vm-client DESTDIR=$RPM_BUILD_ROOT
+make install-vm-server DESTDIR=$RPM_BUILD_ROOT
+
+%global crate_client %{crate}-client
+%package %{crate_client}
+Summary:        Convert untrusted files to trustable files - Client part
+Requires:	pdftk-java gtk4
+
+%description %{crate_client} %{_description}
+
+%files %{crate_client}
+%defattr(-,root,root,-)
+/usr/lib/qubes/qvm-convert.gnome
+/usr/share/nautilus-python/extensions/qvm_convert_nautilus.py
+/usr/share/kde4/services/qvm-convert.desktop
+/usr/bin/qubes-converter-client-cli
+/usr/bin/qubes-converter-client-gtk
+
+%global crate_server %{crate}-server
+%package %{crate_server}
+Summary:        Convert untrusted files to trustable files - Server part
+Requires:	pdftk-java libreoffice GraphicsMagick zenity poppler
+
+%description %{crate_server} %{_description}
+
+%files %{crate_server}
+%defattr(-,root,root,-)
+/etc/qubes-rpc/qubes.Convert
+/usr/bin/qubes-converter-server
+
+%changelog
+%autochangelog
