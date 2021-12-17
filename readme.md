@@ -6,27 +6,18 @@ Status: Standard cases are working. Many non "standard" cases work. Currently
 testing before a first stable version.
 
 Goals before reaching any 'usable' state:
-- Improve my skills in rust: In progress
-- Provide all the functionnalities of "qubes-app-linux-pdf-converter": Done
+- Fedora packaging
+- Dom0 packaging 
+- Debian packaging 
+- Wait for stable release of Clap dependency
+- Add warning in CLI and GUI about danger of OCR
+
+Features: 
+- Provide all the functionnalities of "qubes-app-linux-pdf-converter"
 - Provide all the functionnalities of my -- currently -- pull request
-  https://github.com/QubesOS/qubes-app-linux-pdf-converter/pull/9 : Done
+  https://github.com/QubesOS/qubes-app-linux-pdf-converter/pull/9
 - Provide most important functionnalities of "qubes-app-linux-img-converter":
   Done
-- Ajouter paragraphe sur les risques de l'utilisation de tesseract (sécurité, et
-  perf).
-- Ajouter ces informations sur les risques de tesseract dans la gui avec warning
-  de couleurs
-- Idem dans la CLI 
-- Add a basic GTK gui: Done (it's ugly but it work)
-- Eventually try to raise my UI skills from 0 to non 0 (Uh.)
-- Archlinux packaging (Done)
-- Debian packaging (Done using "cargo deb")
-- Fedora packaging (Done using "cargo rpm")
-- Dom0 packaging for Qubes OS (Mostly done, not tested.)
-- Split the software in 2 packages: client and server. The server will require
-a lot of dependencies. So the goals is to be able to install the client (who
-does not require a lot of dependencies) in a different Qubes Template VM than
-the server. (Done)
 
 Extended goals:
 - Sound converter 
