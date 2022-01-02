@@ -1,15 +1,11 @@
 IMPORTANT
 ==========
-!!! In development, do not use it. !!!
+Status: Seems to work as expected.
 
-Status: Standard cases are working. Many non "standard" cases work. Currently
-testing before a first stable version.
-
-Goals before reaching any 'usable' state:
+TODO:
 - Fedora packaging
 - Dom0 packaging 
 - Debian packaging 
-- Wait for stable release of Clap dependency
 - Add warning in CLI and GUI about danger of OCR
 
 Features: 

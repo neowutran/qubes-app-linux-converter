@@ -1,14 +1,14 @@
 #![forbid(unsafe_code)]
 #![deny(clippy::mem_forget)]
-use qubes_converter_client;
-use qubes_converter_common;
 use clap::{AppSettings, Parser};
-use qubes_converter_client::{convert_all_files, list_ocr_langs, ConvertEvent, ConvertParameters};
 use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use glob::glob;
+use qubes_converter_client;
+use qubes_converter_client::{convert_all_files, list_ocr_langs, ConvertEvent, ConvertParameters};
+use qubes_converter_common;
 use std::{
     convert::TryInto,
     io,
@@ -22,27 +22,37 @@ use tui::{
     widgets::{Block, Borders, Gauge},
     Terminal,
 };
-//#[clap(setting = AppSettings::ColoredHelp)]
 #[derive(Parser)]
 #[clap(version, about, author)]
 #[clap(setting = AppSettings::ArgRequiredElseHelp)]
 struct Opts {
     #[clap(required = true)]
     files: Vec<String>,
+
     #[clap(short, long)]
     in_place: bool,
+
     #[clap(short, long)]
     no_fancy_ui: bool,
+
     #[clap(short, long)]
     archive: Option<String>,
+
     #[clap(short, long)]
     default_password: Option<String>,
-    #[clap(short, long, help = "TODO")]
+
+    #[clap(
+        short,
+        long,
+        help = "WARNING: using this option increase the attack surface. Example: if there is a exploitable bug in tesseract, this software won't protect you."
+    )]
     ocr_lang: Option<String>,
+
     #[clap(short, long)]
     list_ocr_langs: bool,
+
     #[clap(short, long, default_value = "1")]
-    max_pages_converted_in_parallele_tesseract: u8,
+    max_tesseract_process: u8,
 }
 struct FancyTuiData {
     filename: String,
@@ -221,7 +231,7 @@ fn main() {
         archive: opts.archive,
         files: all_files.clone(),
         default_password: opts.default_password.unwrap_or_default(),
-        max_pages_converted_in_parallele: opts.max_pages_converted_in_parallele_tesseract,
+        max_pages_converted_in_parallele: opts.max_tesseract_process,
         ocr: opts.ocr_lang,
         stderr: opts.no_fancy_ui,
     };

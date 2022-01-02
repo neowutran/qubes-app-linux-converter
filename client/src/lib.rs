@@ -1,7 +1,7 @@
 #![forbid(unsafe_code)]
 #![deny(clippy::mem_forget)]
-use qubes_converter_common::OutputType;
 use log::debug;
+use qubes_converter_common::OutputType;
 use std::{
     collections::HashMap,
     convert::{TryFrom, TryInto},

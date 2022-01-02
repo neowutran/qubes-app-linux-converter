@@ -1,9 +1,9 @@
 #![forbid(unsafe_code)]
 #![deny(clippy::mem_forget)]
+use gio::prelude::*;
 use qubes_converter_client::{
     convert_all_files, default_archive_folder, list_ocr_langs, ConvertEvent, ConvertParameters,
 };
-use gio::prelude::*;
 
 use clap::Parser;
 use glib::{clone, GString, Receiver, ToValue};

@@ -18,10 +18,10 @@
  - https://github.com/firstlookmedia/dangerzone-converter
  Both projects can improve the other.
 */
-use qubes_converter_common;
-use qubes_converter_common::OutputType;
 use image::io::Reader as ImageReader;
 use log::debug;
+use qubes_converter_common;
+use qubes_converter_common::OutputType;
 use std::{
     fs::{self, File},
     io::{self, prelude::*, BufRead},

@@ -16,9 +16,7 @@ env_logger = "0"
 uuid = {version = "0",  features = ["v4"]}
 image = "0"
 num_cpus = "1"
-# TODO, before this software reach any "releasable" state:
-# - Stop using "beta" dependencies
-clap = {version = "3.0.0-rc.4", features = ["derive", "default"]}
+clap = {version = "3.0.0", features = ["derive", "default"]}
 
 # Server
 tree_magic = "0"
@@ -42,12 +40,3 @@ glib = "0"
 [package.metadata.deb]
 depends = "poppler-utils, libreoffice, graphicsmagick,python3,python3-nautilus | python-nautilus, libgtk-4.1, pdftk, zenity"
 recommends = "tesseract-ocr"
-
-[package.metadata.rpm]
-package = "qubes-converter-client-gtk"
-
-[package.metadata.rpm.cargo]
-buildflags = ["--release"]
-
-[package.metadata.rpm.targets]
-qubes-converter-client-gtk = { path = "/usr/bin/qubes-converter-client-gtk" }
